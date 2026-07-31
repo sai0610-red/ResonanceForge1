@@ -44,7 +44,7 @@
 
 # ```bash
 
-# git clone https://github.com/sai0610-red/ResonanceForge.git
+# git clone https://github.com/sai0610-red/ResonanceForge1.git
 
 # cd ResonanceForge
 
