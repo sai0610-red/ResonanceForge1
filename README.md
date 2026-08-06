@@ -30,15 +30,15 @@
 
 # - LangGraph
 
-# \- LangChain
+# - LangChain
 
-# \- Groq (LLM)
+# - Groq (LLM)
 
-# \- Python 3.11+
+# - Python 3.11+
 
 # 
 
-# \## How to Run
+# How to Run :
 
 # 
 
