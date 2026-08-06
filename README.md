@@ -1,4 +1,4 @@
-# \ResonanceForge
+# ResonanceForge
 
 # 
 
@@ -10,25 +10,25 @@
 
 # 
 
-# \## Features
+# Features
 
 # 
 
-# \- \*\*Diagnostician Agent\*\* – Scores ACCESS, ADAPT, ADOPT
+# Diagnostician Agent – Scores ACCESS, ADAPT, ADOPT
 
-# \- \*\*Architect Agent\*\* – Designs multi-agent solution
+# Architect Agent  – Designs multi-agent solution
 
-# \- \*\*Code Generator Agent\*\* – Produces real LangGraph code
+# Code Generator Agent – Produces real LangGraph code
 
-# \- \*\*Critic Agent\*\* – Reviews and recommends next steps
-
-# 
-
-# \## Tech Stack
+# Critic Agent – Reviews and recommends next steps
 
 # 
 
-# \- LangGraph
+# Tech Stack
+
+# 
+
+# - LangGraph
 
 # \- LangChain
 
