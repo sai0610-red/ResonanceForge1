@@ -1,8 +1,8 @@
-# \# ResonanceForge
+# \ResonanceForge
 
 # 
 
-# \*\*Multi-agent system that operationalizes Capgemini’s Resonance Framework\*\*
+# Multi-agent system that operationalizes Capgemini’s Resonance Framework
 
 # 
 
