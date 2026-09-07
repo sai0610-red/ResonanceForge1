@@ -24,7 +24,7 @@ ResonanceForge is a clone-and-run internal assessment tool for companies evaluat
 ## Quick start
 
 ```bash
-git clone https://github.com/sai0610-red/ResonanceForge1.git ResonanceForge
+git clone <your-repo-url> ResonanceForge
 cd ResonanceForge
 cp .env.example .env
 # Edit .env and set GROQ_API_KEY=...
@@ -82,7 +82,7 @@ START → diagnostician → architect → code_generator → critic → END
 | **Code Generator** | Valid LangGraph Python (`StateGraph`, `TypedDict`, `START`/`END`, `compile()`) |
 | **Critic** | Strengths, weaknesses, risks, recommendations, verdict |
 
-Orchestration lives in `app/graphs/resonance_graph.py`. LLM: Groq via `langchain_groq` (`GROQ_MODEL`, default `llama-3.3-70b-versatile`).
+Orchestration lives in `app/graphs/resonance_graph.py`. LLM: Groq via `langchain_groq` (`GROQ_MODEL`, default `openai/gpt-oss-120b`).
 
 ## Project layout
 
