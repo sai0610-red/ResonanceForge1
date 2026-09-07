@@ -24,7 +24,7 @@ ResonanceForge is a clone-and-run internal assessment tool for companies evaluat
 ## Quick start
 
 ```bash
-git clone <your-repo-url> ResonanceForge
+git clone https://github.com/sai0610-red/ResonanceForge1.git ResonanceForge
 cd ResonanceForge
 cp .env.example .env
 # Edit .env and set GROQ_API_KEY=...
