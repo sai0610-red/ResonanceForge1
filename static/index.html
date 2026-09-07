@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ResonanceForge — Multi-Agent AI Readiness</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="header">
+      <div class="brand">
+        <span class="brand-mark">◈</span>
+        <div>
+          <h1 class="wordmark">ResonanceForge</h1>
+          <p class="tagline">Diagnose readiness. Design agents. Generate LangGraph. Critique before you pilot.</p>
+        </div>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="panel input-panel">
+        <h2 class="panel-title">Assessment input</h2>
+        <label class="field-label" for="question">Company situation</label>
+        <textarea
+          id="question"
+          rows="5"
+          placeholder="Describe the company context, data maturity, AI strategy, and what you want to assess for multi-agent adoption…"
+        ></textarea>
+
+        <div class="field-row">
+          <div class="field">
+            <label class="field-label" for="industry">Industry</label>
+            <select id="industry">
+              <option value="">Select industry</option>
+              <option>Retail</option>
+              <option>Manufacturing</option>
+              <option>Healthcare</option>
+              <option>Finance</option>
+              <option>Technology</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="field-label" for="companySize">Company size</label>
+            <select id="companySize">
+              <option value="">Select size</option>
+              <option>Startup</option>
+              <option>Mid-size</option>
+              <option>Enterprise</option>
+            </select>
+          </div>
+        </div>
+
+        <button id="runBtn" class="btn btn-primary" type="button">Run assessment</button>
+        <p class="hint">Example: How ready is a mid-size retail company with poor data quality and no AI strategy for adopting multi-agent systems?</p>
+      </section>
+
+      <section class="panel progress-panel hidden" id="progressPanel">
+        <h2 class="panel-title">Pipeline progress</h2>
+        <ol class="steps" id="stepsList">
+          <li class="step" data-step="1"><span class="step-num">1/4</span> Diagnosing readiness</li>
+          <li class="step" data-step="2"><span class="step-num">2/4</span> Designing architecture</li>
+          <li class="step" data-step="3"><span class="step-num">3/4</span> Generating LangGraph code</li>
+          <li class="step" data-step="4"><span class="step-num">4/4</span> Critiquing solution</li>
+        </ol>
+      </section>
+
+      <section class="panel error-panel hidden" id="errorPanel">
+        <h2 class="panel-title">Something went wrong</h2>
+        <p id="errorMessage" class="error-message"></p>
+      </section>
+
+      <section class="panel empty-panel" id="emptyPanel">
+        <h2 class="panel-title">Results</h2>
+        <p class="empty-copy">No assessment yet. Describe a company situation and run an assessment to see ACCESS / ADAPT / ADOPT scores, architecture, LangGraph code, and critique.</p>
+      </section>
+
+      <section class="results hidden" id="resultsPanel">
+        <div class="results-toolbar">
+          <h2 class="panel-title">Assessment results</h2>
+          <div class="toolbar-actions">
+            <button type="button" class="btn btn-ghost" id="downloadJsonBtn">Download JSON</button>
+            <button type="button" class="btn btn-ghost" id="downloadMdBtn">Download Markdown</button>
+          </div>
+        </div>
+
+        <div class="diag-header">
+          <h3>Readiness diagnosis</h3>
+          <span class="badge" id="overallBadge">—</span>
+        </div>
+        <div class="score-grid" id="scoreGrid"></div>
+        <div class="card">
+          <h4>Summary</h4>
+          <p id="diagSummary"></p>
+          <h4>Top gaps</h4>
+          <ul id="topGaps"></ul>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h3>Architecture</h3>
+            <span class="badge badge-muted" id="complexityBadge">—</span>
+          </div>
+          <h4>Recommended agents</h4>
+          <ul id="agentList" class="agent-list"></ul>
+          <h4>High-level flow</h4>
+          <ol id="flowList"></ol>
+          <h4>Rationale</h4>
+          <p id="archRationale"></p>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h3>Generated LangGraph code</h3>
+            <button type="button" class="btn btn-ghost btn-sm" id="copyCodeBtn">Copy code</button>
+          </div>
+          <p id="codeExplanation" class="muted"></p>
+          <pre class="code-block"><code id="codeBlock" class="language-python"></code></pre>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <h3>Critique</h3>
+            <span class="badge" id="verdictBadge">—</span>
+          </div>
+          <div class="critique-grid">
+            <div>
+              <h4>Strengths</h4>
+              <ul id="strengthsList"></ul>
+            </div>
+            <div>
+              <h4>Weaknesses</h4>
+              <ul id="weaknessesList"></ul>
+            </div>
+            <div>
+              <h4>Risks</h4>
+              <ul id="risksList"></ul>
+            </div>
+            <div>
+              <h4>Recommendations</h4>
+              <ul id="recsList"></ul>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>ResonanceForge v1 · MIT License · Internal assessment tool</span>
+    </footer>
+  </div>
+  <script src="/static/app.js"></script>
+</body>
+</html>
