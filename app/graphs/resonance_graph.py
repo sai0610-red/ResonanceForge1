@@ -16,6 +16,16 @@ from app.models.schemas import (
     ResonanceReport,
 )
 
+INTAKE_KEYS = (
+    "industry",
+    "company_size",
+    "company_name",
+    "role_title",
+    "primary_systems",
+    "constraints",
+    "success_metric",
+)
+
 
 def _replace(_old, new):
     """Reducer that replaces the previous value."""
@@ -26,18 +36,23 @@ class ResonanceState(TypedDict, total=False):
     question: Annotated[str, _replace]
     industry: Annotated[Optional[str], _replace]
     company_size: Annotated[Optional[str], _replace]
+    company_name: Annotated[Optional[str], _replace]
+    role_title: Annotated[Optional[str], _replace]
+    primary_systems: Annotated[Optional[str], _replace]
+    constraints: Annotated[Optional[str], _replace]
+    success_metric: Annotated[Optional[str], _replace]
     diagnosis: Annotated[Optional[DiagnosisResult], _replace]
     architecture: Annotated[Optional[ArchitectureResult], _replace]
     generated_code: Annotated[Optional[CodeGenerationResult], _replace]
     critique: Annotated[Optional[CritiqueResult], _replace]
 
 
+def _intake_kwargs(state: ResonanceState) -> dict:
+    return {k: state.get(k) for k in INTAKE_KEYS}
+
+
 def _diagnostician_node(state: ResonanceState) -> dict:
-    result = run_diagnostician(
-        question=state["question"],
-        industry=state.get("industry"),
-        company_size=state.get("company_size"),
-    )
+    result = run_diagnostician(question=state["question"], **_intake_kwargs(state))
     return {"diagnosis": result}
 
 
@@ -45,8 +60,7 @@ def _architect_node(state: ResonanceState) -> dict:
     result = run_architect(
         question=state["question"],
         diagnosis=state["diagnosis"],
-        industry=state.get("industry"),
-        company_size=state.get("company_size"),
+        **_intake_kwargs(state),
     )
     return {"architecture": result}
 
@@ -56,8 +70,7 @@ def _code_generator_node(state: ResonanceState) -> dict:
         question=state["question"],
         diagnosis=state["diagnosis"],
         architecture=state["architecture"],
-        industry=state.get("industry"),
-        company_size=state.get("company_size"),
+        **_intake_kwargs(state),
     )
     return {"generated_code": result}
 
@@ -68,8 +81,7 @@ def _critic_node(state: ResonanceState) -> dict:
         diagnosis=state["diagnosis"],
         architecture=state["architecture"],
         generated_code=state["generated_code"],
-        industry=state.get("industry"),
-        company_size=state.get("company_size"),
+        **_intake_kwargs(state),
     )
     return {"critique": result}
 
@@ -105,6 +117,11 @@ def run_assessment(
     question: str,
     industry: str | None = None,
     company_size: str | None = None,
+    company_name: str | None = None,
+    role_title: str | None = None,
+    primary_systems: str | None = None,
+    constraints: str | None = None,
+    success_metric: str | None = None,
 ) -> ResonanceReport:
     """Run the full four-agent assessment and return a ResonanceReport."""
     if not question or not question.strip():
@@ -116,6 +133,11 @@ def run_assessment(
             "question": question.strip(),
             "industry": industry,
             "company_size": company_size,
+            "company_name": company_name,
+            "role_title": role_title,
+            "primary_systems": primary_systems,
+            "constraints": constraints,
+            "success_metric": success_metric,
             "diagnosis": None,
             "architecture": None,
             "generated_code": None,
@@ -129,4 +151,109 @@ def run_assessment(
         architecture=final["architecture"],
         generated_code=final["generated_code"],
         critique=final["critique"],
+    )
+
+
+def run_assessment_sequential(
+    question: str,
+    industry: str | None = None,
+    company_size: str | None = None,
+    company_name: str | None = None,
+    role_title: str | None = None,
+    primary_systems: str | None = None,
+    constraints: str | None = None,
+    success_metric: str | None = None,
+    on_step=None,
+) -> ResonanceReport:
+    """
+    Run agents in order (same outputs as the LangGraph path).
+
+    on_step(step: int, name: str, label: str, partial: dict | None) is called
+    when a step starts (partial=None) and again after it finishes with partial payload.
+    """
+    if not question or not question.strip():
+        raise ValueError("question must be a non-empty string")
+
+    q = question.strip()
+    intake = dict(
+        industry=industry,
+        company_size=company_size,
+        company_name=company_name,
+        role_title=role_title,
+        primary_systems=primary_systems,
+        constraints=constraints,
+        success_metric=success_metric,
+    )
+
+    steps = [
+        (1, "diagnostician", "Diagnosing readiness"),
+        (2, "architect", "Designing architecture"),
+        (3, "code_generator", "Generating LangGraph code"),
+        (4, "critic", "Critiquing solution"),
+    ]
+
+    if on_step:
+        on_step(1, "diagnostician", "Diagnosing readiness", None)
+    diagnosis = run_diagnostician(question=q, **intake)
+    if on_step:
+        on_step(
+            1,
+            "diagnostician",
+            "Diagnosing readiness",
+            {"diagnosis": diagnosis.model_dump()},
+        )
+
+    if on_step:
+        on_step(2, "architect", "Designing architecture", None)
+    architecture = run_architect(question=q, diagnosis=diagnosis, **intake)
+    if on_step:
+        on_step(
+            2,
+            "architect",
+            "Designing architecture",
+            {"architecture": architecture.model_dump()},
+        )
+
+    if on_step:
+        on_step(3, "code_generator", "Generating LangGraph code", None)
+    generated_code = run_code_generator(
+        question=q, diagnosis=diagnosis, architecture=architecture, **intake
+    )
+    if on_step:
+        on_step(
+            3,
+            "code_generator",
+            "Generating LangGraph code",
+            {
+                "generated_code": {
+                    "language": generated_code.language,
+                    "framework": generated_code.framework,
+                    "explanation": generated_code.explanation,
+                }
+            },
+        )
+
+    if on_step:
+        on_step(4, "critic", "Critiquing solution", None)
+    critique = run_critic(
+        question=q,
+        diagnosis=diagnosis,
+        architecture=architecture,
+        generated_code=generated_code,
+        **intake,
+    )
+    if on_step:
+        on_step(
+            4,
+            "critic",
+            "Critiquing solution",
+            {"critique": critique.model_dump()},
+        )
+
+    return ResonanceReport(
+        user_question=q,
+        diagnosis=diagnosis,
+        architecture=architecture,
+        generated_code=generated_code,
+        critique=critique,
     )
