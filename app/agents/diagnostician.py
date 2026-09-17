@@ -2,6 +2,7 @@
 
 from app.core.llm import get_llm
 from app.models.schemas import DiagnosisResult
+from app.services.context import format_intake_context
 
 SYSTEM_PROMPT = """You are an expert enterprise AI readiness diagnostician specializing in multi-agent systems.
 
@@ -24,16 +25,25 @@ def run_diagnostician(
     question: str,
     industry: str | None = None,
     company_size: str | None = None,
+    company_name: str | None = None,
+    role_title: str | None = None,
+    primary_systems: str | None = None,
+    constraints: str | None = None,
+    success_metric: str | None = None,
 ) -> DiagnosisResult:
     """Diagnose multi-agent AI readiness for the given company situation."""
     llm = get_llm().with_structured_output(DiagnosisResult)
 
-    context_parts = [f"Company situation / question:\n{question}"]
-    if industry:
-        context_parts.append(f"Industry: {industry}")
-    if company_size:
-        context_parts.append(f"Company size: {company_size}")
-    user_prompt = "\n\n".join(context_parts)
+    user_prompt = format_intake_context(
+        question=question,
+        industry=industry,
+        company_size=company_size,
+        company_name=company_name,
+        role_title=role_title,
+        primary_systems=primary_systems,
+        constraints=constraints,
+        success_metric=success_metric,
+    )
 
     return llm.invoke(
         [

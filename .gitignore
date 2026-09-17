@@ -10,3 +10,6 @@ build/
 .vscode/
 *.egg-info/
 .pytest_cache/
+data/*.db
+data/*.db-*
+!data/.gitkeep

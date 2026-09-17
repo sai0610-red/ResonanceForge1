@@ -2,6 +2,7 @@
 
 from app.core.llm import get_llm
 from app.models.schemas import ArchitectureResult, CodeGenerationResult, DiagnosisResult
+from app.services.context import format_intake_context
 
 SYSTEM_PROMPT = """You are an expert LangGraph engineer. Generate complete, runnable Python code for a multi-agent workflow.
 
@@ -27,22 +28,30 @@ def run_code_generator(
     architecture: ArchitectureResult,
     industry: str | None = None,
     company_size: str | None = None,
+    company_name: str | None = None,
+    role_title: str | None = None,
+    primary_systems: str | None = None,
+    constraints: str | None = None,
+    success_metric: str | None = None,
 ) -> CodeGenerationResult:
     """Generate LangGraph code from the architecture design."""
     llm = get_llm().with_structured_output(CodeGenerationResult)
 
-    context_parts = [
-        f"Company situation / question:\n{question}",
-        f"Diagnosis JSON:\n{diagnosis.model_dump_json(indent=2)}",
-        f"Architecture JSON:\n{architecture.model_dump_json(indent=2)}",
-    ]
-    if industry:
-        context_parts.append(f"Industry: {industry}")
-    if company_size:
-        context_parts.append(f"Company size: {company_size}")
+    context = format_intake_context(
+        question=question,
+        industry=industry,
+        company_size=company_size,
+        company_name=company_name,
+        role_title=role_title,
+        primary_systems=primary_systems,
+        constraints=constraints,
+        success_metric=success_metric,
+    )
     user_prompt = (
-        "\n\n".join(context_parts)
-        + "\n\nGenerate complete LangGraph Python code implementing this architecture."
+        f"{context}\n\n"
+        f"Diagnosis JSON:\n{diagnosis.model_dump_json(indent=2)}\n\n"
+        f"Architecture JSON:\n{architecture.model_dump_json(indent=2)}\n\n"
+        "Generate complete LangGraph Python code implementing this architecture."
     )
 
     return llm.invoke(

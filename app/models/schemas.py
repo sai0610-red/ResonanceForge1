@@ -48,6 +48,11 @@ class AssessRequest(BaseModel):
     question: str
     industry: Optional[str] = None
     company_size: Optional[str] = None
+    company_name: Optional[str] = None
+    role_title: Optional[str] = None
+    primary_systems: Optional[str] = None
+    constraints: Optional[str] = None
+    success_metric: Optional[str] = None
 
 
 class ResonanceReport(BaseModel):

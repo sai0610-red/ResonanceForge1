@@ -2,6 +2,7 @@
 
 from app.core.llm import get_llm
 from app.models.schemas import ArchitectureResult, DiagnosisResult
+from app.services.context import format_intake_context
 
 SYSTEM_PROMPT = """You are a senior multi-agent systems architect specializing in LangGraph-based designs.
 
@@ -21,19 +22,28 @@ def run_architect(
     diagnosis: DiagnosisResult,
     industry: str | None = None,
     company_size: str | None = None,
+    company_name: str | None = None,
+    role_title: str | None = None,
+    primary_systems: str | None = None,
+    constraints: str | None = None,
+    success_metric: str | None = None,
 ) -> ArchitectureResult:
     """Design a multi-agent architecture informed by the diagnosis."""
     llm = get_llm().with_structured_output(ArchitectureResult)
 
-    context_parts = [
-        f"Company situation / question:\n{question}",
-        f"Diagnosis JSON:\n{diagnosis.model_dump_json(indent=2)}",
-    ]
-    if industry:
-        context_parts.append(f"Industry: {industry}")
-    if company_size:
-        context_parts.append(f"Company size: {company_size}")
-    user_prompt = "\n\n".join(context_parts)
+    context = format_intake_context(
+        question=question,
+        industry=industry,
+        company_size=company_size,
+        company_name=company_name,
+        role_title=role_title,
+        primary_systems=primary_systems,
+        constraints=constraints,
+        success_metric=success_metric,
+    )
+    user_prompt = (
+        f"{context}\n\nDiagnosis JSON:\n{diagnosis.model_dump_json(indent=2)}"
+    )
 
     return llm.invoke(
         [
