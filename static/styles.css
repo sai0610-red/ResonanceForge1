@@ -491,3 +491,67 @@ li { margin: 6px 0; line-height: 1.45; }
   .field-row, .field-row-3, .score-grid, .critique-grid { grid-template-columns: 1fr; }
   .app-shell { padding: 18px 14px 36px; }
 }
+
+
+/* Checklist */
+.checklist-section { margin: 20px 0 8px; }
+.checklist-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  margin-bottom: 6px;
+}
+.checklist-title { margin: 0; font-size: 1rem; color: var(--text); }
+.checklist-progress { color: var(--teal); font-size: 0.85rem; font-weight: 600; }
+.checklist-hint { margin: 0 0 12px; }
+.checklist-root { display: flex; flex-direction: column; gap: 10px; }
+.checklist-dim {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+.checklist-dim > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 12px 14px;
+  font-weight: 600;
+  color: var(--teal);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.checklist-dim > summary::-webkit-details-marker { display: none; }
+.checklist-dim[open] > summary { border-bottom: 1px solid var(--border); }
+.checklist-dim-body { padding: 12px 14px 16px; display: flex; flex-direction: column; gap: 16px; }
+.checklist-q { }
+.checklist-q-prompt { margin: 0 0 8px; font-size: 0.92rem; line-height: 1.4; }
+.checklist-options {
+  display: flex; flex-direction: column; gap: 6px;
+}
+.checklist-opt {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  cursor: pointer;
+}
+.checklist-opt:hover { border-color: rgba(45, 212, 191, 0.45); }
+.checklist-opt input { margin-top: 3px; accent-color: var(--teal); }
+.checklist-opt span { font-size: 0.85rem; color: var(--muted); line-height: 1.35; }
+.checklist-opt:has(input:checked) {
+  border-color: var(--teal);
+  background: var(--teal-dim);
+}
+.checklist-opt:has(input:checked) span { color: var(--text); }
+
+/* Leadership brief */
+.leadership-brief {
+  border-color: rgba(45, 212, 191, 0.35);
+  background: linear-gradient(180deg, rgba(45, 212, 191, 0.08), transparent 120px), var(--panel);
+}
+.brief-verdict { font-weight: 600; color: var(--teal); }
+.brief-meta { color: var(--muted); margin: 8px 0 0; font-size: 0.9rem; }
+.brief-meta strong { color: var(--text); }

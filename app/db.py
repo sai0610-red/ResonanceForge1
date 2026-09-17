@@ -54,6 +54,10 @@ def ensure_db() -> None:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_assessments_created_at ON assessments(created_at DESC)"
         )
+        # Migrate: add checklist_json if missing (existing DBs)
+        cols = {row[1] for row in conn.execute("PRAGMA table_info(assessments)").fetchall()}
+        if "checklist_json" not in cols:
+            conn.execute("ALTER TABLE assessments ADD COLUMN checklist_json TEXT")
         conn.commit()
         _initialized = True
     finally:
@@ -82,11 +86,26 @@ def create_assessment(
     primary_systems: Optional[str] = None,
     constraints: Optional[str] = None,
     success_metric: Optional[str] = None,
+    checklist: Optional[list] = None,
     status: str = "pending",
 ) -> str:
     """Insert a new assessment row; return its id (also used as share_token)."""
     assessment_id = _new_id()
     created_at = _utc_now_iso()
+    checklist_json = None
+    if checklist is not None:
+        if hasattr(checklist, "__iter__") and not isinstance(checklist, (str, bytes)):
+            payload = []
+            for item in checklist:
+                if hasattr(item, "model_dump"):
+                    payload.append(item.model_dump())
+                elif isinstance(item, dict):
+                    payload.append(item)
+                else:
+                    payload.append({"question_id": str(item), "value": 0})
+            checklist_json = json.dumps(payload)
+        else:
+            checklist_json = json.dumps(checklist)
     with _connect() as conn:
         conn.execute(
             """
@@ -94,8 +113,8 @@ def create_assessment(
                 id, created_at, status,
                 company_name, industry, company_size, role_title,
                 primary_systems, constraints, success_metric, question,
-                report_json, error, share_token
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)
+                report_json, error, share_token, checklist_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
             """,
             (
                 assessment_id,
@@ -110,6 +129,7 @@ def create_assessment(
                 success_metric,
                 question,
                 assessment_id,
+                checklist_json,
             ),
         )
         conn.commit()
@@ -182,6 +202,14 @@ def _row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
         except json.JSONDecodeError:
             report = None
     data["report"] = report
+    checklist = None
+    craw = data.get("checklist_json")
+    if craw:
+        try:
+            checklist = json.loads(craw)
+        except json.JSONDecodeError:
+            checklist = None
+    data["checklist"] = checklist
     return data
 
 

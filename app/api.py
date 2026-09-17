@@ -17,6 +17,9 @@ from app.agents.critic import run_critic
 from app.agents.diagnostician import run_diagnostician
 from app.graphs.resonance_graph import run_assessment
 from app.models.schemas import AssessRequest, ResonanceReport
+from app.rubric.checklist import get_checklist_payload
+from app.services.one_pager import build_one_pager, one_pager_sections
+from app.services.pilot_package import attach_pilot, pilot_zip_path
 from app.services.report import to_markdown
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -25,7 +28,7 @@ STATIC_DIR = ROOT / "static"
 app = FastAPI(
     title="ResonanceForge",
     description="Multi-agent AI readiness assessment platform",
-    version="1.1.0",
+    version="1.2.0",
 )
 
 
@@ -44,6 +47,12 @@ def _intake_from_body(body: AssessRequest) -> dict[str, Optional[str]]:
         "constraints": body.constraints,
         "success_metric": body.success_metric,
     }
+
+
+def _checklist_from_body(body: AssessRequest) -> list | None:
+    if not body.checklist:
+        return None
+    return body.checklist
 
 
 def _ensure_groq_configured() -> None:
@@ -89,6 +98,20 @@ def _sse(event: str, data: dict[str, Any]) -> str:
     return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
+def _finalize_report(
+    assessment_id: str,
+    report: ResonanceReport,
+    *,
+    primary_systems: Optional[str] = None,
+) -> ResonanceReport:
+    """Attach runnable pilot zip and persist."""
+    report = attach_pilot(
+        assessment_id, report, primary_systems=primary_systems
+    )
+    db.save_report(assessment_id, report)
+    return report
+
+
 # --- API routes (before static mounts) ---
 
 
@@ -96,6 +119,12 @@ def _sse(event: str, data: dict[str, Any]) -> str:
 def health():
     """Liveness probe."""
     return {"status": "ok"}
+
+
+@app.get("/api/checklist")
+def api_checklist():
+    """Return the fixed 15-question ACCESS / ADAPT / ADOPT checklist."""
+    return {"questions": get_checklist_payload()}
 
 
 @app.get("/api/assessments")
@@ -123,10 +152,45 @@ def api_get_assessment(assessment_id: str):
         "constraints": row["constraints"],
         "success_metric": row["success_metric"],
         "question": row["question"],
+        "checklist": row.get("checklist"),
         "report": row.get("report"),
         "error": row.get("error"),
         "share_token": row.get("share_token"),
+        "one_pager": (
+            one_pager_sections(
+                ResonanceReport.model_validate(row["report"]),
+                company_name=row.get("company_name"),
+            )
+            if row.get("status") == "completed" and row.get("report")
+            else None
+        ),
     }
+
+
+@app.get("/api/assessments/{assessment_id}/pilot.zip")
+def api_download_pilot(assessment_id: str):
+    """Download the runnable Docker pilot zip for an assessment."""
+    path = pilot_zip_path(assessment_id)
+    if not path.is_file():
+        # Try rebuild from stored report
+        row = db.get_by_id(assessment_id)
+        if row is None or not row.get("report"):
+            raise HTTPException(status_code=404, detail="Pilot package not found")
+        report = ResonanceReport.model_validate(row["report"])
+        report = attach_pilot(
+            assessment_id,
+            report,
+            primary_systems=row.get("primary_systems"),
+        )
+        db.save_report(assessment_id, report)
+        path = pilot_zip_path(assessment_id)
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="Pilot package not found")
+    return FileResponse(
+        path,
+        media_type="application/zip",
+        filename=f"resonanceforge-pilot-{assessment_id}.zip",
+    )
 
 
 @app.get("/api/reports/{assessment_id}")
@@ -135,6 +199,7 @@ def api_public_report(assessment_id: str):
     row = db.get_by_id(assessment_id)
     if row is None or row.get("status") != "completed" or not row.get("report"):
         raise HTTPException(status_code=404, detail="Report not found")
+    report = ResonanceReport.model_validate(row["report"])
     return {
         "id": row["id"],
         "created_at": row["created_at"],
@@ -147,22 +212,27 @@ def api_public_report(assessment_id: str):
         "success_metric": row["success_metric"],
         "question": row["question"],
         "report": row["report"],
+        "one_pager": one_pager_sections(
+            report, company_name=row.get("company_name")
+        ),
     }
 
 
 @app.post("/api/assessments/stream")
 def api_assess_stream(body: AssessRequest):
-    """Run assessment with SSE progress events; persist result."""
+    """Run assessment with SSE progress events; persist result + pilot zip."""
     question = (body.question or "").strip()
     if not question:
         raise HTTPException(status_code=422, detail="question must not be empty")
 
     _ensure_groq_configured()
     intake = _intake_from_body(body)
+    checklist = _checklist_from_body(body)
 
     assessment_id = db.create_assessment(
         question=question,
         status="running",
+        checklist=checklist,
         **intake,
     )
 
@@ -177,7 +247,9 @@ def api_assess_stream(body: AssessRequest):
                     "id": assessment_id,
                 },
             )
-            diagnosis = run_diagnostician(question=question, **intake)
+            diagnosis = run_diagnostician(
+                question=question, checklist=checklist, **intake
+            )
             yield _sse(
                 "step",
                 {
@@ -278,10 +350,20 @@ def api_assess_stream(body: AssessRequest):
                 generated_code=generated_code,
                 critique=critique,
             )
-            db.save_report(assessment_id, report)
+            report = _finalize_report(
+                assessment_id,
+                report,
+                primary_systems=intake.get("primary_systems"),
+            )
             yield _sse(
                 "complete",
-                {"id": assessment_id, "report": report.model_dump()},
+                {
+                    "id": assessment_id,
+                    "report": report.model_dump(),
+                    "one_pager": one_pager_sections(
+                        report, company_name=intake.get("company_name")
+                    ),
+                },
             )
         except Exception as exc:
             message = str(exc) or exc.__class__.__name__
@@ -304,24 +386,36 @@ def api_assess_stream(body: AssessRequest):
 
 @app.post("/assess")
 def assess(body: AssessRequest):
-    """Run the four-agent ResonanceForge assessment (sync; persists result)."""
+    """Run the four-agent ResonanceForge assessment (sync; persists + pilot)."""
     question = (body.question or "").strip()
     if not question:
         raise HTTPException(status_code=422, detail="question must not be empty")
 
     _ensure_groq_configured()
     intake = _intake_from_body(body)
+    checklist = _checklist_from_body(body)
 
     assessment_id = db.create_assessment(
         question=question,
         status="running",
+        checklist=checklist,
         **intake,
     )
 
     try:
-        report = run_assessment(question=question, **intake)
-        db.save_report(assessment_id, report)
-        response = JSONResponse(content=report.model_dump())
+        report = run_assessment(
+            question=question, checklist=checklist, **intake
+        )
+        report = _finalize_report(
+            assessment_id,
+            report,
+            primary_systems=intake.get("primary_systems"),
+        )
+        payload = report.model_dump()
+        payload["one_pager_markdown"] = build_one_pager(
+            report, company_name=intake.get("company_name")
+        )
+        response = JSONResponse(content=payload)
         response.headers["X-Assessment-Id"] = assessment_id
         return response
     except HTTPException:
@@ -343,7 +437,7 @@ def assess_get_hint(unused: str):
             "detail": (
                 "Use POST /assess or POST /api/assessments/stream with JSON body "
                 "{question, industry, company_size, company_name, role_title, "
-                "primary_systems, constraints, success_metric}"
+                "primary_systems, constraints, success_metric, checklist}"
             )
         },
     )

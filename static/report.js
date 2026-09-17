@@ -92,6 +92,43 @@
     return span;
   }
 
+
+  function fillList(ul, items) {
+    if (!ul) return;
+    while (ul.firstChild) ul.removeChild(ul.firstChild);
+    (items || []).forEach((text) => {
+      const li = document.createElement("li");
+      li.textContent = text;
+      ul.appendChild(li);
+    });
+  }
+
+  function renderLeadershipBrief(report, onePager, assessmentId) {
+    const brief = document.getElementById("leadershipBrief");
+    if (!brief) return;
+    const d = report.diagnosis;
+    const c = report.critique;
+    const op = onePager || {};
+    const go = document.getElementById("briefGoNoGo");
+    if (go) {
+      go.textContent = op.go_no_go || c.final_verdict || "—";
+      go.className = "badge " + verdictClass(op.go_no_go || c.final_verdict);
+    }
+    const verdict = document.getElementById("briefVerdict");
+    if (verdict) verdict.textContent = op.executive_verdict || ((c.final_verdict || "") + " · " + (d.overall_readiness || ""));
+    const summary = document.getElementById("briefSummary");
+    if (summary) summary.textContent = op.summary || d.summary || "";
+    const cost = document.getElementById("briefCost");
+    if (cost) cost.textContent = op.cost_band || "—";
+    fillList(document.getElementById("briefPlan"), op.ninety_day_plan || []);
+    const breaks = (report.pilot && report.pilot.what_breaks_first) || op.top_gaps || d.top_gaps || [];
+    fillList(document.getElementById("briefBreaks"), breaks.slice(0, 6));
+    const pilotBtn = document.getElementById("downloadPilotBtn");
+    if (pilotBtn && assessmentId) {
+      pilotBtn.href = "/api/assessments/" + encodeURIComponent(assessmentId) + "/pilot.zip";
+    }
+  }
+
   function render(payload) {
     const report = payload.report;
     const d = report.diagnosis;
@@ -175,6 +212,8 @@
     fillList(els.weaknessesList, c.weaknesses);
     fillList(els.risksList, c.risks);
     fillList(els.recsList, c.recommendations);
+
+    renderLeadershipBrief(report, payload.one_pager, payload.id);
 
     document.title =
       (payload.company_name ? payload.company_name + " — " : "") +

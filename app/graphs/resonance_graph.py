@@ -1,6 +1,6 @@
 """LangGraph orchestration: diagnostician → architect → code_generator → critic."""
 
-from typing import Annotated, Optional, TypedDict
+from typing import Annotated, Any, Dict, List, Optional, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
@@ -15,6 +15,7 @@ from app.models.schemas import (
     DiagnosisResult,
     ResonanceReport,
 )
+from app.services.context import gap_summary_from_diagnosis
 
 INTAKE_KEYS = (
     "industry",
@@ -41,6 +42,7 @@ class ResonanceState(TypedDict, total=False):
     primary_systems: Annotated[Optional[str], _replace]
     constraints: Annotated[Optional[str], _replace]
     success_metric: Annotated[Optional[str], _replace]
+    checklist: Annotated[Optional[Any], _replace]
     diagnosis: Annotated[Optional[DiagnosisResult], _replace]
     architecture: Annotated[Optional[ArchitectureResult], _replace]
     generated_code: Annotated[Optional[CodeGenerationResult], _replace]
@@ -52,35 +54,48 @@ def _intake_kwargs(state: ResonanceState) -> dict:
 
 
 def _diagnostician_node(state: ResonanceState) -> dict:
-    result = run_diagnostician(question=state["question"], **_intake_kwargs(state))
+    result = run_diagnostician(
+        question=state["question"],
+        checklist=state.get("checklist"),
+        **_intake_kwargs(state),
+    )
     return {"diagnosis": result}
 
 
 def _architect_node(state: ResonanceState) -> dict:
+    diagnosis = state["diagnosis"]
+    gap_summary = gap_summary_from_diagnosis(diagnosis) if diagnosis else None
     result = run_architect(
         question=state["question"],
-        diagnosis=state["diagnosis"],
+        diagnosis=diagnosis,
+        checklist_gap_summary=gap_summary,
         **_intake_kwargs(state),
     )
     return {"architecture": result}
 
 
 def _code_generator_node(state: ResonanceState) -> dict:
+    diagnosis = state["diagnosis"]
+    gap_summary = gap_summary_from_diagnosis(diagnosis) if diagnosis else None
     result = run_code_generator(
         question=state["question"],
-        diagnosis=state["diagnosis"],
+        diagnosis=diagnosis,
         architecture=state["architecture"],
+        checklist_gap_summary=gap_summary,
         **_intake_kwargs(state),
     )
     return {"generated_code": result}
 
 
 def _critic_node(state: ResonanceState) -> dict:
+    diagnosis = state["diagnosis"]
+    gap_summary = gap_summary_from_diagnosis(diagnosis) if diagnosis else None
     result = run_critic(
         question=state["question"],
-        diagnosis=state["diagnosis"],
+        diagnosis=diagnosis,
         architecture=state["architecture"],
         generated_code=state["generated_code"],
+        checklist_gap_summary=gap_summary,
         **_intake_kwargs(state),
     )
     return {"critique": result}
@@ -122,6 +137,7 @@ def run_assessment(
     primary_systems: str | None = None,
     constraints: str | None = None,
     success_metric: str | None = None,
+    checklist: List[Any] | Dict[str, int] | None = None,
 ) -> ResonanceReport:
     """Run the full four-agent assessment and return a ResonanceReport."""
     if not question or not question.strip():
@@ -138,6 +154,7 @@ def run_assessment(
             "primary_systems": primary_systems,
             "constraints": constraints,
             "success_metric": success_metric,
+            "checklist": checklist,
             "diagnosis": None,
             "architecture": None,
             "generated_code": None,
@@ -163,13 +180,14 @@ def run_assessment_sequential(
     primary_systems: str | None = None,
     constraints: str | None = None,
     success_metric: str | None = None,
+    checklist: List[Any] | Dict[str, int] | None = None,
     on_step=None,
 ) -> ResonanceReport:
     """
     Run agents in order (same outputs as the LangGraph path).
 
-    on_step(step: int, name: str, label: str, partial: dict | None) is called
-    when a step starts (partial=None) and again after it finishes with partial payload.
+    on_step(step, name, label, partial) is called when a step starts (partial=None)
+    and again after it finishes with partial payload.
     """
     if not question or not question.strip():
         raise ValueError("question must be a non-empty string")
@@ -185,16 +203,10 @@ def run_assessment_sequential(
         success_metric=success_metric,
     )
 
-    steps = [
-        (1, "diagnostician", "Diagnosing readiness"),
-        (2, "architect", "Designing architecture"),
-        (3, "code_generator", "Generating LangGraph code"),
-        (4, "critic", "Critiquing solution"),
-    ]
-
     if on_step:
         on_step(1, "diagnostician", "Diagnosing readiness", None)
-    diagnosis = run_diagnostician(question=q, **intake)
+    diagnosis = run_diagnostician(question=q, checklist=checklist, **intake)
+    gap_summary = gap_summary_from_diagnosis(diagnosis)
     if on_step:
         on_step(
             1,
@@ -205,7 +217,12 @@ def run_assessment_sequential(
 
     if on_step:
         on_step(2, "architect", "Designing architecture", None)
-    architecture = run_architect(question=q, diagnosis=diagnosis, **intake)
+    architecture = run_architect(
+        question=q,
+        diagnosis=diagnosis,
+        checklist_gap_summary=gap_summary,
+        **intake,
+    )
     if on_step:
         on_step(
             2,
@@ -217,7 +234,11 @@ def run_assessment_sequential(
     if on_step:
         on_step(3, "code_generator", "Generating LangGraph code", None)
     generated_code = run_code_generator(
-        question=q, diagnosis=diagnosis, architecture=architecture, **intake
+        question=q,
+        diagnosis=diagnosis,
+        architecture=architecture,
+        checklist_gap_summary=gap_summary,
+        **intake,
     )
     if on_step:
         on_step(
@@ -240,6 +261,7 @@ def run_assessment_sequential(
         diagnosis=diagnosis,
         architecture=architecture,
         generated_code=generated_code,
+        checklist_gap_summary=gap_summary,
         **intake,
     )
     if on_step:

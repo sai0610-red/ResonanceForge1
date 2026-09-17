@@ -85,7 +85,17 @@
             </div>
           </div>
 
-          <button id="runBtn" class="btn btn-primary" type="button">Run assessment</button>
+
+          <div class="checklist-section" id="checklistSection">
+            <div class="checklist-head">
+              <h3 class="checklist-title">Readiness checklist <span class="req">*</span></h3>
+              <span class="checklist-progress" id="checklistProgress">0 / 15 answered</span>
+            </div>
+            <p class="hint checklist-hint">Answer all 15 questions (1–5). Scores are deterministic from this rubric when complete.</p>
+            <div id="checklistRoot" class="checklist-root">Loading checklist…</div>
+          </div>
+
+          <button id="runBtn" class="btn btn-primary" type="button" disabled>Run assessment</button>
           <p class="hint">Example: How ready is a mid-size retail company with poor data quality and no AI strategy for adopting multi-agent systems?</p>
         </section>
 
@@ -116,9 +126,26 @@
               <button type="button" class="btn btn-ghost" id="shareLinkBtn">Share link</button>
               <button type="button" class="btn btn-ghost" id="downloadJsonBtn">Download JSON</button>
               <button type="button" class="btn btn-ghost" id="downloadMdBtn">Download Markdown</button>
+              <button type="button" class="btn btn-primary btn-sm" id="downloadPilotBtn">Download runnable pilot (Docker)</button>
             </div>
           </div>
           <p class="share-hint muted hidden" id="shareHint"></p>
+
+          <div class="card leadership-brief" id="leadershipBrief">
+            <div class="card-head">
+              <h3>Leadership brief</h3>
+              <span class="badge" id="briefGoNoGo">—</span>
+            </div>
+            <p id="briefVerdict" class="brief-verdict"></p>
+            <p id="briefSummary"></p>
+            <div class="brief-meta">
+              <span>Cost band: <strong id="briefCost">—</strong></span>
+            </div>
+            <h4>90-day plan</h4>
+            <ul id="briefPlan"></ul>
+            <h4>What breaks first</h4>
+            <ul id="briefBreaks"></ul>
+          </div>
 
           <div class="diag-header">
             <h3>Readiness diagnosis</h3>

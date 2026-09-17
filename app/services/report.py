@@ -1,6 +1,7 @@
 """Markdown and JSON report helpers."""
 
 from app.models.schemas import ResonanceReport
+from app.services.one_pager import build_one_pager
 
 
 def to_markdown(report: ResonanceReport) -> str:
@@ -11,6 +12,11 @@ def to_markdown(report: ResonanceReport) -> str:
     c = report.critique
 
     lines: list[str] = []
+    # Leadership brief first
+    lines.append(build_one_pager(report).rstrip())
+    lines.append("")
+    lines.append("---")
+    lines.append("")
     lines.append("# ResonanceForge Assessment Report")
     lines.append("")
     lines.append("## Question")

@@ -20,6 +20,8 @@ Rules:
 - recommendations: concrete next steps (3+ items preferred).
 - final_verdict: exactly one of "Ready for pilot", "Needs work", "Not ready".
 Be candid. Do not rubber-stamp Low-readiness situations as ready for pilot.
+
+Weigh checklist gaps and primary systems heavily in risks and final_verdict.
 """
 
 
@@ -35,6 +37,7 @@ def run_critic(
     primary_systems: str | None = None,
     constraints: str | None = None,
     success_metric: str | None = None,
+    checklist_gap_summary: str | None = None,
 ) -> CritiqueResult:
     """Critique the full assessment package."""
     llm = get_llm().with_structured_output(CritiqueResult)
@@ -48,6 +51,7 @@ def run_critic(
         primary_systems=primary_systems,
         constraints=constraints,
         success_metric=success_metric,
+        checklist_gap_summary=checklist_gap_summary,
     )
     user_prompt = (
         f"{context}\n\n"
