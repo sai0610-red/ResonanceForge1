@@ -10,11 +10,21 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = ROOT / "data"
-DB_PATH = DATA_DIR / "resonanceforge.db"
+from app.core.config import get_settings
 
-_initialized = False
+DB_FILENAME = "resonanceforge.db"
+
+# Path of the DB file that ensure_db() last initialized (None = not yet).
+_initialized: Optional[Path] = None
+
+
+def get_data_dir() -> Path:
+    """DATA_DIR from settings (default ./data under the project root)."""
+    return get_settings().data_path
+
+
+def get_db_path() -> Path:
+    return get_data_dir() / DB_FILENAME
 
 
 def _utc_now_iso() -> str:
@@ -28,8 +38,9 @@ def _new_id() -> str:
 def ensure_db() -> None:
     """Create data directory and assessments table if needed."""
     global _initialized
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
+    db_path = get_db_path()
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db_path), check_same_thread=False)
     try:
         conn.execute(
             """
@@ -59,16 +70,26 @@ def ensure_db() -> None:
         if "checklist_json" not in cols:
             conn.execute("ALTER TABLE assessments ADD COLUMN checklist_json TEXT")
         conn.commit()
-        _initialized = True
+        _initialized = db_path
     finally:
         conn.close()
 
 
+def ping() -> bool:
+    """Health probe: True when a trivial SELECT 1 succeeds."""
+    try:
+        with _connect() as conn:
+            return conn.execute("SELECT 1").fetchone()[0] == 1
+    except Exception:
+        return False
+
+
 @contextmanager
 def _connect():
-    if not _initialized:
+    db_path = get_db_path()
+    if _initialized != db_path:
         ensure_db()
-    conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
+    conn = sqlite3.connect(str(db_path), check_same_thread=False)
     conn.row_factory = sqlite3.Row
     try:
         yield conn

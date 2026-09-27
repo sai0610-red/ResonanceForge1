@@ -67,6 +67,16 @@ class PilotPackageInfo(BaseModel):
     what_breaks_first: List[str]
 
 
+class ScaffoldCheck(BaseModel):
+    """Static compile-check of generated code (ast.parse + compile, never exec)."""
+
+    ok: bool
+    error: Optional[str] = None
+    lines: int = 0
+    has_stategraph: bool = False
+    has_compile: bool = False
+
+
 class ResonanceReport(BaseModel):
     user_question: str
     diagnosis: DiagnosisResult
@@ -74,3 +84,4 @@ class ResonanceReport(BaseModel):
     generated_code: CodeGenerationResult
     critique: CritiqueResult
     pilot: Optional[PilotPackageInfo] = None
+    scaffold_check: Optional[ScaffoldCheck] = None
