@@ -12,6 +12,37 @@ ResonanceForge is a B2B assessment product for mid-market AI / transformation le
 - **Share links** — `/r/{id}` read-only report page for VP sharing; public JSON at `/api/reports/{id}`.
 - **Sync compat** — `POST /assess` still works for CLI and fallback; results are persisted.
 
+
+## Grounded checklist + runnable pilot
+
+ResonanceForge is not a ChatGPT memo. Assessments are grounded in a fixed **15-question ACCESS / ADAPT / ADOPT checklist** (deterministic 1–10 scoring) and produce a **runnable Docker pilot** zip.
+
+### Checklist scoring
+
+- 5 questions per dimension (ACCESS / ADAPT / ADOPT), answers 1–5
+- Dimension score = `round(avg * 2)` clamped to 1–10
+- Overall: mean of three dimensions → Low <4.5, Medium <7.5, else High
+- `GET /api/checklist` returns the questions for the UI
+- When all 15 answers are present, the diagnostician **skips the LLM** and uses the rubric
+
+### Runnable pilot package
+
+After each assessment, a zip is written under `data/pilots/{id}.zip` containing:
+
+- `README.md`, `Dockerfile`, `docker-compose.yml`
+- `app/main.py` (generated LangGraph or a solid stub)
+- `app/requirements.txt`, `evals/test_pilot.py`, `WHAT_BREAKS_FIRST.md`
+
+Download via **Download runnable pilot (Docker)** in the UI, or:
+
+```bash
+curl -OJ http://localhost:8000/api/assessments/{id}/pilot.zip
+```
+
+### Leadership brief
+
+Share pages and Markdown downloads lead with a stakeholder 1-pager: executive verdict, scores, top gaps, 90-day plan, cost band, and go/no-go.
+
 ## How companies use it
 
 1. Describe a company situation and fill optional structured intake fields.
@@ -62,7 +93,9 @@ The CLI prints an assessment id and share path when persistence is enabled (`--n
 |--------|------|-------------|
 | `GET` | `/` | Main UI |
 | `GET` | `/static/*` | Static assets |
-| `GET` | `/health` | `{"status":"ok"}` |
+| `GET` | `/health` |
+| `GET` | `/api/checklist` | 15-question checklist for UI |
+| `GET` | `/api/assessments/{id}/pilot.zip` | Download runnable Docker pilot | `{"status":"ok"}` |
 | `POST` | `/assess` | Sync assessment → `ResonanceReport` (+ `X-Assessment-Id`, persisted) |
 | `POST` | `/api/assessments/stream` | SSE assessment (`event: step` / `complete` / `error`) |
 | `GET` | `/api/assessments` | List summaries |

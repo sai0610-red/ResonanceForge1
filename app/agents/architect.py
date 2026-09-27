@@ -14,6 +14,8 @@ Rules:
 - rationale: explain why this design fits the company readiness and industry.
 - estimated_complexity: Low / Medium / High based on integration depth, number of agents, and risk.
 Favor pragmatic pilot-ready designs over enterprise mega-systems when readiness is Low or Medium.
+
+Map architecture to the checklist gaps and named primary systems when provided.
 """
 
 
@@ -27,6 +29,7 @@ def run_architect(
     primary_systems: str | None = None,
     constraints: str | None = None,
     success_metric: str | None = None,
+    checklist_gap_summary: str | None = None,
 ) -> ArchitectureResult:
     """Design a multi-agent architecture informed by the diagnosis."""
     llm = get_llm().with_structured_output(ArchitectureResult)
@@ -40,6 +43,7 @@ def run_architect(
         primary_systems=primary_systems,
         constraints=constraints,
         success_metric=success_metric,
+        checklist_gap_summary=checklist_gap_summary,
     )
     user_prompt = (
         f"{context}\n\nDiagnosis JSON:\n{diagnosis.model_dump_json(indent=2)}"

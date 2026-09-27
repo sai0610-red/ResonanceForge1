@@ -40,14 +40,27 @@
     recsList: $("recsList"),
     downloadJsonBtn: $("downloadJsonBtn"),
     downloadMdBtn: $("downloadMdBtn"),
+    downloadPilotBtn: $("downloadPilotBtn"),
     shareLinkBtn: $("shareLinkBtn"),
     shareHint: $("shareHint"),
     historyList: $("historyList"),
     historyEmpty: $("historyEmpty"),
+    checklistRoot: $("checklistRoot"),
+    checklistProgress: $("checklistProgress"),
+    leadershipBrief: $("leadershipBrief"),
+    briefGoNoGo: $("briefGoNoGo"),
+    briefVerdict: $("briefVerdict"),
+    briefSummary: $("briefSummary"),
+    briefCost: $("briefCost"),
+    briefPlan: $("briefPlan"),
+    briefBreaks: $("briefBreaks"),
   };
 
   let lastReport = null;
   let lastAssessmentId = null;
+  let checklistQuestions = [];
+  let checklistAnswers = {}; // id -> 1..5
+  let lastOnePager = null;
 
   function setHidden(el, hidden) {
     if (!el) return;
@@ -278,7 +291,118 @@
     return lines.join("\n");
   }
 
-  function collectBody() {
+
+  function updateChecklistProgress() {
+    const total = checklistQuestions.length || 15;
+    const answered = Object.keys(checklistAnswers).length;
+    if (els.checklistProgress) {
+      els.checklistProgress.textContent = answered + " / " + total + " answered";
+    }
+    const complete = answered >= total && total > 0;
+    if (els.runBtn) els.runBtn.disabled = !complete;
+    return complete;
+  }
+
+  function renderChecklist(questions) {
+    checklistQuestions = questions || [];
+    const root = els.checklistRoot;
+    if (!root) return;
+    root.innerHTML = "";
+    const dims = [
+      { key: "access", label: "ACCESS" },
+      { key: "adapt", label: "ADAPT" },
+      { key: "adopt", label: "ADOPT" },
+    ];
+    dims.forEach((dim, idx) => {
+      const items = checklistQuestions.filter((q) => q.dimension === dim.key);
+      const details = document.createElement("details");
+      details.className = "checklist-dim";
+      details.open = idx === 0;
+      const summary = document.createElement("summary");
+      summary.innerHTML = dim.label + ' <span class="dim-count" data-dim="' + dim.key + '">0/' + items.length + '</span>';
+      details.appendChild(summary);
+      const body = document.createElement("div");
+      body.className = "checklist-dim-body";
+      items.forEach((q) => {
+        const wrap = document.createElement("div");
+        wrap.className = "checklist-q";
+        wrap.dataset.qid = q.id;
+        const prompt = document.createElement("p");
+        prompt.className = "checklist-q-prompt";
+        prompt.textContent = q.prompt;
+        wrap.appendChild(prompt);
+        const opts = document.createElement("div");
+        opts.className = "checklist-options";
+        (q.options || []).forEach((opt) => {
+          const label = document.createElement("label");
+          label.className = "checklist-opt";
+          const input = document.createElement("input");
+          input.type = "radio";
+          input.name = "cq_" + q.id;
+          input.value = String(opt.value);
+          if (checklistAnswers[q.id] === opt.value) input.checked = true;
+          input.addEventListener("change", () => {
+            checklistAnswers[q.id] = Number(opt.value);
+            // update dim count
+            const dimItems = checklistQuestions.filter((x) => x.dimension === dim.key);
+            const n = dimItems.filter((x) => checklistAnswers[x.id] != null).length;
+            const badge = details.querySelector('.dim-count[data-dim="' + dim.key + '"]');
+            if (badge) badge.textContent = n + "/" + dimItems.length;
+            updateChecklistProgress();
+          });
+          const span = document.createElement("span");
+          span.textContent = opt.value + " — " + opt.label;
+          label.appendChild(input);
+          label.appendChild(span);
+          opts.appendChild(label);
+        });
+        wrap.appendChild(opts);
+        body.appendChild(wrap);
+      });
+      details.appendChild(body);
+      root.appendChild(details);
+    });
+    updateChecklistProgress();
+  }
+
+  async function loadChecklist() {
+    try {
+      const res = await fetch("/api/checklist");
+      if (!res.ok) throw new Error("checklist " + res.status);
+      const data = await res.json();
+      renderChecklist(data.questions || data || []);
+    } catch (err) {
+      console.warn("Failed to load checklist", err);
+      if (els.checklistRoot) {
+        els.checklistRoot.textContent = "Could not load checklist. Refresh the page.";
+      }
+    }
+  }
+
+  function collectChecklist() {
+    return Object.keys(checklistAnswers).map((qid) => ({
+      question_id: qid,
+      value: checklistAnswers[qid],
+    }));
+  }
+
+  function renderLeadershipBrief(report, onePager) {
+    if (!els.leadershipBrief) return;
+    const d = report.diagnosis;
+    const c = report.critique;
+    const op = onePager || {};
+    els.briefGoNoGo.textContent = op.go_no_go || c.final_verdict || "—";
+    els.briefGoNoGo.className = "badge " + verdictClass(op.go_no_go || c.final_verdict);
+    els.briefVerdict.textContent = op.executive_verdict || (c.final_verdict + " · " + d.overall_readiness);
+    els.briefSummary.textContent = op.summary || d.summary || "";
+    els.briefCost.textContent = op.cost_band || "—";
+    fillList(els.briefPlan, op.ninety_day_plan || []);
+    const breaks = (report.pilot && report.pilot.what_breaks_first) || op.top_gaps || d.top_gaps || [];
+    fillList(els.briefBreaks, breaks.slice(0, 6));
+  }
+
+
+    function collectBody() {
     return {
       question: (els.question.value || "").trim(),
       industry: els.industry.value || null,
@@ -288,6 +412,7 @@
       primary_systems: (els.primarySystems.value || "").trim() || null,
       constraints: (els.constraints.value || "").trim() || null,
       success_metric: (els.successMetric.value || "").trim() || null,
+      checklist: collectChecklist(),
     };
   }
 
@@ -342,6 +467,7 @@
           if (ev.data.id) lastAssessmentId = ev.data.id;
         } else if (ev.event === "complete") {
           completed = ev.data;
+          if (ev.data && ev.data.one_pager) lastOnePager = ev.data.one_pager;
         } else if (ev.event === "error") {
           failed = (ev.data && ev.data.detail) || "Assessment failed";
         }
@@ -388,11 +514,16 @@
       showError("Please enter a company situation / question before running the assessment.");
       return;
     }
+    if (!updateChecklistProgress()) {
+      showError("Please answer all 15 checklist questions before running the assessment.");
+      return;
+    }
 
     hideError();
     setHidden(els.resultsPanel, true);
     setHidden(els.emptyPanel, true);
     setShareHint(null);
+    lastOnePager = null;
     els.runBtn.disabled = true;
     showProgress();
     setStep(1);
@@ -576,5 +707,16 @@
     );
   });
 
+  if (els.downloadPilotBtn) {
+    els.downloadPilotBtn.addEventListener("click", () => {
+      if (!lastAssessmentId) {
+        showError("No assessment id for pilot download. Run an assessment first.");
+        return;
+      }
+      window.location.href = "/api/assessments/" + encodeURIComponent(lastAssessmentId) + "/pilot.zip";
+    });
+  }
+
+  loadChecklist();
   loadHistory();
 })();

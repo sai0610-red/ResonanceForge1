@@ -44,6 +44,11 @@ class CritiqueResult(BaseModel):
     final_verdict: Literal["Ready for pilot", "Needs work", "Not ready"]
 
 
+class ChecklistAnswer(BaseModel):
+    question_id: str
+    value: int = Field(..., ge=1, le=5)
+
+
 class AssessRequest(BaseModel):
     question: str
     industry: Optional[str] = None
@@ -53,6 +58,13 @@ class AssessRequest(BaseModel):
     primary_systems: Optional[str] = None
     constraints: Optional[str] = None
     success_metric: Optional[str] = None
+    checklist: Optional[List[ChecklistAnswer]] = None
+
+
+class PilotPackageInfo(BaseModel):
+    download_path: str
+    filename: str
+    what_breaks_first: List[str]
 
 
 class ResonanceReport(BaseModel):
@@ -61,3 +73,4 @@ class ResonanceReport(BaseModel):
     architecture: ArchitectureResult
     generated_code: CodeGenerationResult
     critique: CritiqueResult
+    pilot: Optional[PilotPackageInfo] = None
