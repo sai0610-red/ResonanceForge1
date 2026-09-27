@@ -8,6 +8,7 @@ from app.agents.architect import run_architect
 from app.agents.code_generator import run_code_generator
 from app.agents.critic import run_critic
 from app.agents.diagnostician import run_diagnostician
+from app.core.agent_log import agent_timer
 from app.models.schemas import (
     ArchitectureResult,
     CodeGenerationResult,
@@ -34,6 +35,7 @@ def _replace(_old, new):
 
 
 class ResonanceState(TypedDict, total=False):
+    assessment_id: Annotated[Optional[str], _replace]
     question: Annotated[str, _replace]
     industry: Annotated[Optional[str], _replace]
     company_size: Annotated[Optional[str], _replace]
@@ -101,13 +103,24 @@ def _critic_node(state: ResonanceState) -> dict:
     return {"critique": result}
 
 
+def _logged(agent: str, fn):
+    """Wrap a node so each run logs assessment_id/agent/latency_ms/ok."""
+
+    def wrapper(state: ResonanceState) -> dict:
+        with agent_timer(state.get("assessment_id"), agent):
+            return fn(state)
+
+    wrapper.__name__ = fn.__name__
+    return wrapper
+
+
 def build_graph():
     """Compile the ResonanceForge assessment graph."""
     graph = StateGraph(ResonanceState)
-    graph.add_node("diagnostician", _diagnostician_node)
-    graph.add_node("architect", _architect_node)
-    graph.add_node("code_generator", _code_generator_node)
-    graph.add_node("critic", _critic_node)
+    graph.add_node("diagnostician", _logged("diagnostician", _diagnostician_node))
+    graph.add_node("architect", _logged("architect", _architect_node))
+    graph.add_node("code_generator", _logged("code_generator", _code_generator_node))
+    graph.add_node("critic", _logged("critic", _critic_node))
 
     graph.add_edge(START, "diagnostician")
     graph.add_edge("diagnostician", "architect")
@@ -138,6 +151,7 @@ def run_assessment(
     constraints: str | None = None,
     success_metric: str | None = None,
     checklist: List[Any] | Dict[str, int] | None = None,
+    assessment_id: str | None = None,
 ) -> ResonanceReport:
     """Run the full four-agent assessment and return a ResonanceReport."""
     if not question or not question.strip():
@@ -146,6 +160,7 @@ def run_assessment(
     graph = get_compiled_graph()
     final: ResonanceState = graph.invoke(
         {
+            "assessment_id": assessment_id,
             "question": question.strip(),
             "industry": industry,
             "company_size": company_size,

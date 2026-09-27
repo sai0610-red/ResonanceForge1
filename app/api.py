@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import hmac
 import json
+import logging
 from pathlib import Path
 from typing import Any, Generator, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -15,15 +17,24 @@ from app.agents.architect import run_architect
 from app.agents.code_generator import run_code_generator
 from app.agents.critic import run_critic
 from app.agents.diagnostician import run_diagnostician
+from app.core.agent_log import agent_timer, configure_logging
+from app.core.config import get_settings
+from app.core.rate_limit import SlidingWindowRateLimiter
 from app.graphs.resonance_graph import run_assessment
-from app.models.schemas import AssessRequest, ResonanceReport
+from app.models.schemas import AssessRequest, ResonanceReport, ScaffoldCheck
 from app.rubric.checklist import get_checklist_payload
 from app.services.one_pager import build_one_pager, one_pager_sections
 from app.services.pilot_package import attach_pilot, pilot_zip_path
 from app.services.report import to_markdown
+from app.services.scaffold_check import check_scaffold
 
 ROOT = Path(__file__).resolve().parent.parent
 STATIC_DIR = ROOT / "static"
+
+logger = logging.getLogger("resonanceforge.api")
+
+# Per-IP sliding window for assessment-creating endpoints (in-memory).
+rate_limiter = SlidingWindowRateLimiter(window_seconds=3600)
 
 app = FastAPI(
     title="ResonanceForge",
@@ -34,7 +45,69 @@ app = FastAPI(
 
 @app.on_event("startup")
 def _startup() -> None:
+    settings = get_settings()
+    configure_logging(settings.log_level)
+    # Raises RuntimeError (app refuses to start) in production without secrets.
+    settings.validate_for_startup()
     db.ensure_db()
+    logger.info(
+        "startup env=%s model=%s demo_token_required=%s rate_limit_per_hour=%d data_dir=%s",
+        settings.env,
+        settings.groq_model,
+        bool(settings.demo_token),
+        settings.rate_limit_per_hour,
+        settings.data_path,
+    )
+
+
+def require_demo_token(
+    x_demo_token: Optional[str] = Header(default=None, alias="X-Demo-Token"),
+) -> None:
+    """When DEMO_TOKEN is set, require a matching X-Demo-Token header (401 otherwise)."""
+    expected = get_settings().demo_token
+    if not expected:
+        return
+    provided = x_demo_token or ""
+    if not hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8")):
+        raise HTTPException(
+            status_code=401,
+            detail="Missing or invalid demo token. Send it in the X-Demo-Token header.",
+        )
+
+
+def _client_ip(request: Request) -> str:
+    return (request.client.host if request.client else None) or "unknown"
+
+
+def _enforce_rate_limit(request: Request) -> None:
+    limit = get_settings().rate_limit_per_hour
+    allowed, retry_after = rate_limiter.check(_client_ip(request), limit)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"Rate limit exceeded: {limit} assessments per hour. "
+                f"Retry in {retry_after} seconds."
+            ),
+            headers={"Retry-After": str(retry_after)},
+        )
+
+
+def _validated_question(body: AssessRequest) -> str:
+    """422 on empty / whitespace or over-long situation text (before any LLM call)."""
+    question = (body.question or "").strip()
+    if not question:
+        raise HTTPException(status_code=422, detail="question must not be empty")
+    max_chars = get_settings().max_situation_chars
+    if len(question) > max_chars:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"question is too long ({len(question)} characters); "
+                f"maximum is {max_chars}."
+            ),
+        )
+    return question
 
 
 def _intake_from_body(body: AssessRequest) -> dict[str, Optional[str]]:
@@ -56,19 +129,14 @@ def _checklist_from_body(body: AssessRequest) -> list | None:
 
 
 def _ensure_groq_configured() -> None:
-    try:
-        from app.core.config import get_settings
-
-        get_settings()
-    except Exception as exc:
+    if not (get_settings().groq_api_key or "").strip():
         raise HTTPException(
             status_code=500,
             detail=(
-                "GROQ_API_KEY is missing or invalid. "
-                "Copy .env.example to .env and set GROQ_API_KEY. "
-                f"({exc})"
+                "GROQ_API_KEY is missing. "
+                "Copy .env.example to .env and set GROQ_API_KEY."
             ),
-        ) from exc
+        )
 
 
 def _map_assessment_error(exc: Exception) -> HTTPException:
@@ -104,7 +172,8 @@ def _finalize_report(
     *,
     primary_systems: Optional[str] = None,
 ) -> ResonanceReport:
-    """Attach runnable pilot zip and persist."""
+    """Attach scaffold compile-check + runnable pilot zip, then persist."""
+    report = _attach_scaffold_check(report)
     report = attach_pilot(
         assessment_id, report, primary_systems=primary_systems
     )
@@ -112,13 +181,42 @@ def _finalize_report(
     return report
 
 
+def _attach_scaffold_check(report: ResonanceReport) -> ResonanceReport:
+    """Never raises: a checker failure becomes ok=False with the error."""
+    try:
+        result = check_scaffold(report.generated_code.code)
+    except Exception as exc:  # defensive; check_scaffold already never raises
+        result = {
+            "ok": False,
+            "error": f"scaffold check failed: {exc.__class__.__name__}",
+            "lines": 0,
+            "has_stategraph": False,
+            "has_compile": False,
+        }
+    return report.model_copy(update={"scaffold_check": ScaffoldCheck(**result)})
+
+
+def _report_with_scaffold_check(report: Optional[dict]) -> Optional[dict]:
+    """Backfill scaffold_check for reports stored before the field existed."""
+    if not report or report.get("scaffold_check"):
+        return report
+    code = (report.get("generated_code") or {}).get("code")
+    return {**report, "scaffold_check": check_scaffold(code)}
+
+
 # --- API routes (before static mounts) ---
 
 
 @app.get("/health")
 def health():
-    """Liveness probe."""
-    return {"status": "ok"}
+    """Liveness / readiness probe (no secrets)."""
+    settings = get_settings()
+    return {
+        "status": "ok",
+        "env": settings.env,
+        "db_ok": db.ping(),
+        "model": settings.groq_model,
+    }
 
 
 @app.get("/api/checklist")
@@ -127,14 +225,14 @@ def api_checklist():
     return {"questions": get_checklist_payload()}
 
 
-@app.get("/api/assessments")
+@app.get("/api/assessments", dependencies=[Depends(require_demo_token)])
 def api_list_assessments(limit: int = 50):
     """List recent assessment summaries."""
     limit = max(1, min(limit, 200))
     return db.list_assessments(limit=limit)
 
 
-@app.get("/api/assessments/{assessment_id}")
+@app.get("/api/assessments/{assessment_id}", dependencies=[Depends(require_demo_token)])
 def api_get_assessment(assessment_id: str):
     """Full assessment record, including report when completed."""
     row = db.get_by_id(assessment_id)
@@ -153,7 +251,7 @@ def api_get_assessment(assessment_id: str):
         "success_metric": row["success_metric"],
         "question": row["question"],
         "checklist": row.get("checklist"),
-        "report": row.get("report"),
+        "report": _report_with_scaffold_check(row.get("report")),
         "error": row.get("error"),
         "share_token": row.get("share_token"),
         "one_pager": (
@@ -167,7 +265,10 @@ def api_get_assessment(assessment_id: str):
     }
 
 
-@app.get("/api/assessments/{assessment_id}/pilot.zip")
+@app.get(
+    "/api/assessments/{assessment_id}/pilot.zip",
+    dependencies=[Depends(require_demo_token)],
+)
 def api_download_pilot(assessment_id: str):
     """Download the runnable Docker pilot zip for an assessment.
 
@@ -218,21 +319,24 @@ def api_public_report(assessment_id: str):
         "constraints": row["constraints"],
         "success_metric": row["success_metric"],
         "question": row["question"],
-        "report": row["report"],
+        "report": _report_with_scaffold_check(row["report"]),
         "one_pager": one_pager_sections(
             report, company_name=row.get("company_name")
         ),
     }
 
 
-@app.post("/api/assessments/stream")
-def api_assess_stream(body: AssessRequest):
-    """Run assessment with SSE progress events; persist result + pilot zip."""
-    question = (body.question or "").strip()
-    if not question:
-        raise HTTPException(status_code=422, detail="question must not be empty")
+def _run_agent(assessment_id: str, agent: str, fn, **kwargs):
+    with agent_timer(assessment_id, agent):
+        return fn(**kwargs)
 
+
+@app.post("/api/assessments/stream", dependencies=[Depends(require_demo_token)])
+def api_assess_stream(body: AssessRequest, request: Request):
+    """Run assessment with SSE progress events; persist result + pilot zip."""
+    question = _validated_question(body)
     _ensure_groq_configured()
+    _enforce_rate_limit(request)
     intake = _intake_from_body(body)
     checklist = _checklist_from_body(body)
 
@@ -254,8 +358,13 @@ def api_assess_stream(body: AssessRequest):
                     "id": assessment_id,
                 },
             )
-            diagnosis = run_diagnostician(
-                question=question, checklist=checklist, **intake
+            diagnosis = _run_agent(
+                assessment_id,
+                "diagnostician",
+                run_diagnostician,
+                question=question,
+                checklist=checklist,
+                **intake,
             )
             yield _sse(
                 "step",
@@ -277,8 +386,13 @@ def api_assess_stream(body: AssessRequest):
                     "id": assessment_id,
                 },
             )
-            architecture = run_architect(
-                question=question, diagnosis=diagnosis, **intake
+            architecture = _run_agent(
+                assessment_id,
+                "architect",
+                run_architect,
+                question=question,
+                diagnosis=diagnosis,
+                **intake,
             )
             yield _sse(
                 "step",
@@ -300,7 +414,10 @@ def api_assess_stream(body: AssessRequest):
                     "id": assessment_id,
                 },
             )
-            generated_code = run_code_generator(
+            generated_code = _run_agent(
+                assessment_id,
+                "code_generator",
+                run_code_generator,
                 question=question,
                 diagnosis=diagnosis,
                 architecture=architecture,
@@ -332,7 +449,10 @@ def api_assess_stream(body: AssessRequest):
                     "id": assessment_id,
                 },
             )
-            critique = run_critic(
+            critique = _run_agent(
+                assessment_id,
+                "critic",
+                run_critic,
                 question=question,
                 diagnosis=diagnosis,
                 architecture=architecture,
@@ -391,14 +511,12 @@ def api_assess_stream(body: AssessRequest):
     )
 
 
-@app.post("/assess")
-def assess(body: AssessRequest):
+@app.post("/assess", dependencies=[Depends(require_demo_token)])
+def assess(body: AssessRequest, request: Request):
     """Run the four-agent ResonanceForge assessment (sync; persists + pilot)."""
-    question = (body.question or "").strip()
-    if not question:
-        raise HTTPException(status_code=422, detail="question must not be empty")
-
+    question = _validated_question(body)
     _ensure_groq_configured()
+    _enforce_rate_limit(request)
     intake = _intake_from_body(body)
     checklist = _checklist_from_body(body)
 
@@ -411,7 +529,10 @@ def assess(body: AssessRequest):
 
     try:
         report = run_assessment(
-            question=question, checklist=checklist, **intake
+            question=question,
+            checklist=checklist,
+            assessment_id=assessment_id,
+            **intake,
         )
         report = _finalize_report(
             assessment_id,

@@ -54,7 +54,57 @@
     briefCost: $("briefCost"),
     briefPlan: $("briefPlan"),
     briefBreaks: $("briefBreaks"),
+    demoToken: $("demoToken"),
+    scaffoldBadge: $("scaffoldBadge"),
+    scaffoldDetail: $("scaffoldDetail"),
   };
+
+  const TOKEN_KEY = "rf_demo_token";
+
+  function getToken() {
+    if (els.demoToken) return (els.demoToken.value || "").trim();
+    try {
+      return (localStorage.getItem(TOKEN_KEY) || "").trim();
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function authHeaders(extra) {
+    const headers = Object.assign({}, extra || {});
+    const token = getToken();
+    if (token) headers["X-Demo-Token"] = token;
+    return headers;
+  }
+
+  function httpError(status, detail, retryAfter) {
+    let msg;
+    if (status === 401) {
+      msg = "Demo token missing or invalid. Paste the demo token in the 'Demo token' field (top right) and try again.";
+    } else if (status === 429) {
+      msg =
+        "Rate limit reached for this demo." +
+        (retryAfter ? " Try again in about " + Math.ceil(Number(retryAfter) / 60) + " minute(s)." : " Try again later.");
+    } else if (status === 422) {
+      msg = "Input rejected: " + (detail || "check the situation text (not empty, within the character limit).");
+    } else {
+      msg = detail || "Request failed with status " + status;
+    }
+    const err = new Error(msg);
+    err.status = status;
+    return err;
+  }
+
+  async function errorFromResponse(res) {
+    let detail = "";
+    try {
+      const j = await res.json();
+      detail = j && j.detail ? (typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail)) : "";
+    } catch (_) {
+      detail = "";
+    }
+    return httpError(res.status, detail, res.headers.get("Retry-After"));
+  }
 
   let lastReport = null;
   let lastAssessmentId = null;
@@ -230,6 +280,8 @@
 
     els.codeExplanation.textContent = g.explanation;
     els.codeBlock.innerHTML = simpleHighlight(g.code || "");
+    renderScaffoldCheck(report.scaffold_check);
+    renderLeadershipBrief(report, lastOnePager);
 
     els.verdictBadge.textContent = c.final_verdict;
     els.verdictBadge.className = "badge " + verdictClass(c.final_verdict);
@@ -241,6 +293,27 @@
     setHidden(els.emptyPanel, true);
     setHidden(els.resultsPanel, false);
     setHidden(els.errorPanel, true);
+  }
+
+  function renderScaffoldCheck(sc) {
+    if (!els.scaffoldBadge) return;
+    if (!sc) {
+      setHidden(els.scaffoldBadge, true);
+      setHidden(els.scaffoldDetail, true);
+      return;
+    }
+    els.scaffoldBadge.textContent = sc.ok ? "Compile check: PASS" : "Compile check: FAIL";
+    els.scaffoldBadge.className = "badge scaffold-badge " + (sc.ok ? "pass" : "fail");
+    els.scaffoldBadge.title = sc.error || "ast.parse + compile() succeeded (not executed)";
+    const parts = [
+      (sc.lines || 0) + " lines",
+      "StateGraph " + (sc.has_stategraph ? "found" : "missing"),
+      ".compile() " + (sc.has_compile ? "found" : "missing"),
+    ];
+    if (sc.error) parts.push(sc.error);
+    els.scaffoldDetail.textContent = "Static check only (parsed and compiled, not executed): " + parts.join(" · ");
+    setHidden(els.scaffoldBadge, false);
+    setHidden(els.scaffoldDetail, false);
   }
 
   function downloadBlob(filename, content, mime) {
@@ -441,9 +514,12 @@
   async function runViaStream(body) {
     const res = await fetch("/api/assessments/stream", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      headers: authHeaders({ "Content-Type": "application/json", Accept: "text/event-stream" }),
       body: JSON.stringify(body),
     });
+    if (!res.ok && res.status >= 400 && res.status < 500) {
+      throw await errorFromResponse(res);
+    }
     if (!res.ok || !res.body) {
       const errText = await res.text().catch(() => "");
       throw new Error("stream_http_" + res.status + (errText ? ": " + errText : ""));
@@ -484,7 +560,7 @@
     const timeout = setTimeout(() => controller.abort(), 180000);
     const res = await fetch("/assess", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      headers: authHeaders({ "Content-Type": "application/json", Accept: "application/json" }),
       body: JSON.stringify(body),
       signal: controller.signal,
     });
@@ -501,7 +577,11 @@
       const detail =
         (data && (data.detail || data.message)) ||
         "Request failed with status " + res.status;
-      throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+      throw httpError(
+        res.status,
+        typeof detail === "string" ? detail : JSON.stringify(detail),
+        res.headers.get("Retry-After")
+      );
     }
 
     const id = res.headers.get("X-Assessment-Id");
@@ -533,6 +613,8 @@
       try {
         result = await runViaStream(body);
       } catch (streamErr) {
+        // 401 / 422 / 429 are final — do not retry via /assess.
+        if (streamErr && streamErr.status >= 400 && streamErr.status < 500) throw streamErr;
         // Fallback to sync POST /assess
         console.warn("SSE stream failed, falling back to /assess", streamErr);
         resetSteps();
@@ -549,6 +631,8 @@
       hideProgress(false);
       if (err && err.name === "AbortError") {
         showError("Assessment timed out. Check your GROQ_API_KEY and network, then try again.");
+      } else if (err && err.status) {
+        showError(err.message);
       } else {
         showError("Network or server error: " + (err && err.message ? err.message : String(err)));
       }
@@ -580,12 +664,19 @@
 
   async function loadHistory() {
     try {
-      const res = await fetch("/api/assessments?limit=50");
+      const res = await fetch("/api/assessments?limit=50", { headers: authHeaders() });
+      if (res.status === 401) {
+        clearList(els.historyList);
+        setHidden(els.historyEmpty, false);
+        els.historyEmpty.textContent = "Enter the demo token (top right) to load history.";
+        return;
+      }
       if (!res.ok) throw new Error("history " + res.status);
       const items = await res.json();
       clearList(els.historyList);
       if (!items.length) {
         setHidden(els.historyEmpty, false);
+        els.historyEmpty.textContent = "No assessments yet. Run one to build your shareable history.";
         return;
       }
       setHidden(els.historyEmpty, true);
@@ -637,10 +728,12 @@
   async function openAssessment(id) {
     hideError();
     try {
-      const res = await fetch("/api/assessments/" + encodeURIComponent(id));
+      const res = await fetch("/api/assessments/" + encodeURIComponent(id), { headers: authHeaders() });
+      if (res.status === 401) throw await errorFromResponse(res);
       if (!res.ok) throw new Error("Failed to load assessment");
       const data = await res.json();
       highlightHistory(id);
+      lastOnePager = data.one_pager || null;
       if (data.status === "completed" && data.report) {
         hideProgress(true);
         renderReport(data.report, data.id);
@@ -708,12 +801,49 @@
   });
 
   if (els.downloadPilotBtn) {
-    els.downloadPilotBtn.addEventListener("click", () => {
+    els.downloadPilotBtn.addEventListener("click", async () => {
       if (!lastAssessmentId) {
         showError("No assessment id for pilot download. Run an assessment first.");
         return;
       }
-      window.location.href = "/api/assessments/" + encodeURIComponent(lastAssessmentId) + "/pilot.zip";
+      // fetch + blob so the X-Demo-Token header is sent (a plain link would drop it).
+      try {
+        const res = await fetch(
+          "/api/assessments/" + encodeURIComponent(lastAssessmentId) + "/pilot.zip",
+          { headers: authHeaders() }
+        );
+        if (!res.ok) throw await errorFromResponse(res);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "resonanceforge-pilot-" + lastAssessmentId + ".zip";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch (err) {
+        els.errorMessage.textContent = "Pilot download failed: " + (err && err.message ? err.message : String(err));
+        setHidden(els.errorPanel, false);
+      }
+    });
+  }
+
+  if (els.demoToken) {
+    try {
+      els.demoToken.value = localStorage.getItem(TOKEN_KEY) || "";
+    } catch (_) {
+      els.demoToken.value = "";
+    }
+    els.demoToken.addEventListener("change", () => {
+      try {
+        const v = (els.demoToken.value || "").trim();
+        if (v) localStorage.setItem(TOKEN_KEY, v);
+        else localStorage.removeItem(TOKEN_KEY);
+      } catch (_) {
+        /* storage unavailable */
+      }
+      loadHistory();
     });
   }
 
