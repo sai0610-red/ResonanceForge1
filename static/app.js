@@ -281,6 +281,7 @@
     els.codeExplanation.textContent = g.explanation;
     els.codeBlock.innerHTML = simpleHighlight(g.code || "");
     renderScaffoldCheck(report.scaffold_check);
+    renderLeadershipBrief(report, lastOnePager);
 
     els.verdictBadge.textContent = c.final_verdict;
     els.verdictBadge.className = "badge " + verdictClass(c.final_verdict);
@@ -732,6 +733,7 @@
       if (!res.ok) throw new Error("Failed to load assessment");
       const data = await res.json();
       highlightHistory(id);
+      lastOnePager = data.one_pager || null;
       if (data.status === "completed" && data.report) {
         hideProgress(true);
         renderReport(data.report, data.id);
