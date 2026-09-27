@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
+  <div class="demo-banner" role="note">Demo. Generated code is a scaffold. Not a production certification.</div>
   <div class="app-shell layout">
     <aside class="history-sidebar panel" id="historyPanel">
       <h2 class="panel-title">History</h2>
@@ -15,13 +16,18 @@
     </aside>
 
     <div class="content-col">
-      <header class="header">
+      <header class="header header-row">
         <div class="brand">
           <span class="brand-mark">◈</span>
           <div>
             <h1 class="wordmark">ResonanceForge</h1>
             <p class="tagline">Situation → leadership-ready readiness report, architecture, and starter LangGraph — shareable with a VP.</p>
           </div>
+        </div>
+        <div class="token-field">
+          <label class="field-label" for="demoToken">Demo token</label>
+          <input type="password" id="demoToken" autocomplete="off" spellcheck="false" placeholder="Paste demo token" />
+          <span class="token-hint muted">Saved in this browser only</span>
         </div>
       </header>
 
@@ -174,9 +180,10 @@
 
           <div class="card">
             <div class="card-head">
-              <h3>Generated LangGraph code</h3>
+              <h3>Generated LangGraph code <span class="badge scaffold-badge hidden" id="scaffoldBadge">—</span></h3>
               <button type="button" class="btn btn-ghost btn-sm" id="copyCodeBtn">Copy code</button>
             </div>
+            <p id="scaffoldDetail" class="scaffold-detail muted hidden"></p>
             <p id="codeExplanation" class="muted"></p>
             <pre class="code-block"><code id="codeBlock" class="language-python"></code></pre>
           </div>
