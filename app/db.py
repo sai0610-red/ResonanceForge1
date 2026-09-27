@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-import secrets
+import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,7 +22,7 @@ def _utc_now_iso() -> str:
 
 
 def _new_id() -> str:
-    return secrets.token_urlsafe(10)
+    return str(uuid.uuid4())
 
 
 def ensure_db() -> None:

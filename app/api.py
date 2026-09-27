@@ -169,12 +169,19 @@ def api_get_assessment(assessment_id: str):
 
 @app.get("/api/assessments/{assessment_id}/pilot.zip")
 def api_download_pilot(assessment_id: str):
-    """Download the runnable Docker pilot zip for an assessment."""
+    """Download the runnable Docker pilot zip for an assessment.
+
+    The id must exist in SQLite; the zip path is derived from the stored id,
+    never from raw user input.
+    """
+    row = db.get_by_id(assessment_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Pilot package not found")
+    assessment_id = row["id"]
     path = pilot_zip_path(assessment_id)
     if not path.is_file():
         # Try rebuild from stored report
-        row = db.get_by_id(assessment_id)
-        if row is None or not row.get("report"):
+        if not row.get("report"):
             raise HTTPException(status_code=404, detail="Pilot package not found")
         report = ResonanceReport.model_validate(row["report"])
         report = attach_pilot(
