@@ -1,6 +1,6 @@
 """Critic agent — reviews diagnosis, architecture, and generated code."""
 
-from app.core.llm import get_llm
+from app.core.llm import get_llm, invoke_with_retry
 from app.models.schemas import (
     ArchitectureResult,
     CodeGenerationResult,
@@ -61,7 +61,7 @@ def run_critic(
         f"Generated code:\n{generated_code.code}"
     )
 
-    return llm.invoke(
+    return invoke_with_retry(llm,
         [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},

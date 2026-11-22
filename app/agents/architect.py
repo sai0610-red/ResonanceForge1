@@ -1,6 +1,6 @@
 """Architect agent — multi-agent system design."""
 
-from app.core.llm import get_llm
+from app.core.llm import get_llm, invoke_with_retry
 from app.models.schemas import ArchitectureResult, DiagnosisResult
 from app.services.context import format_intake_context
 
@@ -49,7 +49,7 @@ def run_architect(
         f"{context}\n\nDiagnosis JSON:\n{diagnosis.model_dump_json(indent=2)}"
     )
 
-    return llm.invoke(
+    return invoke_with_retry(llm,
         [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},

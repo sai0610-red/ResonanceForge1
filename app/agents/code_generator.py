@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import re
 
-from app.core.llm import get_llm
+from app.core.llm import get_llm, invoke_with_retry
 from app.models.schemas import ArchitectureResult, CodeGenerationResult, DiagnosisResult
 from app.services.context import format_intake_context
 
@@ -159,7 +159,7 @@ def run_code_generator(
     for attempt in range(2):
         try:
             llm = get_llm().with_structured_output(CodeGenerationResult)
-            result = llm.invoke(
+            result = invoke_with_retry(llm,
                 [
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": user_prompt},
@@ -169,10 +169,11 @@ def run_code_generator(
                 return result
         except Exception as exc:
             last_err = exc
-            logger.warning("code_generator attempt %s failed: %s", attempt + 1, exc)
+            logger.warning("code_generator attempt %s failed: %s", attempt + 1, exc.__class__.__name__)
 
     logger.warning(
-        "code_generator falling back to architecture stub (%s)", last_err
+        "code_generator falling back to architecture stub (%s)",
+        last_err.__class__.__name__ if last_err else "no-stategraph",
     )
     return CodeGenerationResult(
         language="python",

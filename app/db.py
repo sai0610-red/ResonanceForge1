@@ -23,8 +23,17 @@ def get_data_dir() -> Path:
     return get_settings().data_path
 
 
+
 def get_db_path() -> Path:
     return get_data_dir() / DB_FILENAME
+
+
+def _apply_pragmas(conn: sqlite3.Connection) -> None:
+    """WAL + a busy timeout so a backup or a second reader does not error immediately."""
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA foreign_keys=ON")
 
 
 def _utc_now_iso() -> str:
@@ -42,6 +51,7 @@ def ensure_db() -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path), check_same_thread=False)
     try:
+        _apply_pragmas(conn)
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS assessments (
@@ -92,6 +102,7 @@ def _connect():
     conn = sqlite3.connect(str(db_path), check_same_thread=False)
     conn.row_factory = sqlite3.Row
     try:
+        _apply_pragmas(conn)
         yield conn
     finally:
         conn.close()

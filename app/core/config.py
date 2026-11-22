@@ -29,11 +29,28 @@ class Settings(BaseSettings):
     max_situation_chars: int = Field(default=4000, alias="MAX_SITUATION_CHARS")
     data_dir: str = Field(default="./data", alias="DATA_DIR")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
+    log_format: str = Field(default="json", alias="LOG_FORMAT")
     env: str = Field(default="development", alias="ENV")
+    # When true, rate limiting uses the first X-Forwarded-For hop. Leave false
+    # unless the process sits behind a trusted proxy (Fly, Railway) that sets
+    # that header. Clients can otherwise spoof the header and bypass the limit.
+    trusted_proxy: bool = Field(default=False, alias="TRUSTED_PROXY")
+    # Comma-separated origins. Empty means CORS middleware is not installed
+    # (same-origin UI does not need it).
+    cors_origins: str = Field(default="", alias="CORS_ORIGINS")
+    llm_timeout_seconds: float = Field(default=60.0, alias="LLM_TIMEOUT_SECONDS")
+    llm_max_retries: int = Field(default=2, alias="LLM_MAX_RETRIES")
+    llm_retry_backoff_seconds: float = Field(
+        default=1.0, alias="LLM_RETRY_BACKOFF_SECONDS"
+    )
 
     @property
     def is_production(self) -> bool:
         return (self.env or "").strip().lower() == "production"
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in (self.cors_origins or "").split(",") if o.strip()]
 
     @property
     def data_path(self) -> Path:

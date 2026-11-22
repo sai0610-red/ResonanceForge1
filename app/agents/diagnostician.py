@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-from app.core.llm import get_llm
+from app.core.llm import get_llm, invoke_with_retry
 from app.models.schemas import DiagnosisResult
 from app.rubric.checklist import (
     answers_from_checklist_list,
@@ -71,7 +71,7 @@ def run_diagnostician(
         "cite reasons as estimated without checklist."
     )
 
-    result = llm.invoke(
+    result = invoke_with_retry(llm,
         [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
