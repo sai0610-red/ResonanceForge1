@@ -555,3 +555,34 @@ li { margin: 6px 0; line-height: 1.45; }
 .brief-verdict { font-weight: 600; color: var(--teal); }
 .brief-meta { color: var(--muted); margin: 8px 0 0; font-size: 0.9rem; }
 .brief-meta strong { color: var(--text); }
+
+/* Demo banner */
+.demo-banner {
+  padding: 6px 16px;
+  text-align: center;
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  color: var(--teal);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid rgba(45, 212, 191, 0.25);
+}
+
+/* Demo token */
+.header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.token-field { display: flex; flex-direction: column; gap: 4px; min-width: 200px; max-width: 240px; }
+.token-field .field-label { margin: 0; }
+.token-field input { padding: 7px 10px; font-size: 0.85rem; }
+.token-hint { font-size: 0.72rem; }
+
+/* Scaffold compile-check badge */
+.scaffold-badge { margin-left: 8px; vertical-align: middle; font-size: 0.72rem; }
+.badge.pass { background: var(--teal-dim); color: var(--teal); border-color: rgba(45, 212, 191, 0.35); }
+.badge.fail { background: rgba(248, 113, 113, 0.08); color: #e7a3a3; border-color: rgba(248, 113, 113, 0.28); }
+.scaffold-detail { margin: 8px 0 0; font-size: 0.82rem; }
+.pilot-msg { margin: 10px 0 0; font-size: 0.85rem; color: var(--danger); }

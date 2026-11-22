@@ -7,6 +7,7 @@ import zipfile
 from pathlib import Path
 from typing import List, Optional
 
+from app.core.config import get_settings
 from app.models.schemas import (
     ArchitectureResult,
     CodeGenerationResult,
@@ -16,8 +17,11 @@ from app.models.schemas import (
     ResonanceReport,
 )
 
-ROOT = Path(__file__).resolve().parent.parent.parent
-PILOTS_DIR = ROOT / "data" / "pilots"
+
+
+def get_pilots_dir() -> Path:
+    """Pilot zips live under DATA_DIR/pilots."""
+    return get_settings().data_path / "pilots"
 
 _REQUIREMENTS = """langgraph>=0.2.0
 langchain-core>=0.3.0
@@ -286,12 +290,13 @@ def build_pilot_package(
     primary_systems: Optional[str] = None,
 ) -> PilotPackageInfo:
     """
-    Write data/pilots/{assessment_id}.zip and return PilotPackageInfo.
+    Write DATA_DIR/pilots/{assessment_id}.zip and return PilotPackageInfo.
     Prefers generated_code.code when it looks like valid LangGraph; else stub.
     """
-    PILOTS_DIR.mkdir(parents=True, exist_ok=True)
+    pilots_dir = get_pilots_dir()
+    pilots_dir.mkdir(parents=True, exist_ok=True)
     filename = f"{assessment_id}.zip"
-    zip_path = PILOTS_DIR / filename
+    zip_path = pilots_dir / filename
 
     code = _strip_markdown_fences(report.generated_code.code or "")
     if _looks_like_valid_langgraph(code):
@@ -326,7 +331,7 @@ def build_pilot_package(
 
 
 def pilot_zip_path(assessment_id: str) -> Path:
-    return PILOTS_DIR / f"{assessment_id}.zip"
+    return get_pilots_dir() / f"{assessment_id}.zip"
 
 
 def attach_pilot(

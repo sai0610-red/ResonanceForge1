@@ -1,0 +1,36 @@
+# Optional Fly.io config for ResonanceForge. Contains NO secrets.
+# Set secrets with:  fly secrets set GROQ_API_KEY=... DEMO_TOKEN=...
+# See docs/deploy.md. Replace the app name placeholder before `fly launch`/`fly deploy`.
+
+app = "your-resonanceforge-app-name"
+primary_region = "dfw"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  ENV = "production"
+  DATA_DIR = "/app/data"
+  LOG_LEVEL = "INFO"
+  GROQ_MODEL = "openai/gpt-oss-120b"
+  RATE_LIMIT_PER_HOUR = "5"
+  MAX_SITUATION_CHARS = "4000"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    grace_period = "15s"
+    interval = "30s"
+    method = "GET"
+    path = "/health"
+    timeout = "5s"
+
+# SQLite + pilot zips live on this volume. One volume = one machine (single instance).
+[[mounts]]
+  source = "rf_data"
+  destination = "/app/data"

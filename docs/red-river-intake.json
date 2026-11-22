@@ -1,0 +1,72 @@
+{
+  "question": "Red River Components is a mid-size discrete manufacturer in the Dallas-Fort Worth area with two plants (CNC machining and metal stamping), about 650 employees, and roughly 2,400 maintenance work orders per month in an on-prem CMMS.\n\nThe workflow we want to assess is work-order exception triage. Every morning two maintenance planners spend 2-3 hours reviewing exceptions: work orders that have missed their SLA, work orders stuck waiting on backordered parts, and work orders whose priority looks wrong (for example, a leaking hydraulic line on a press logged as P4, or a cosmetic guard issue logged as P1). About 18% of P1/P2 work orders miss SLA today. Roughly a third of those are parts-related: the part shows as in stock in the ERP but is actually on backorder or sitting in the wrong crib.\n\nData reality: asset hierarchy in the CMMS is about 70% complete, failure codes are free text and inconsistent across shifts, and the ERP-to-CMMS parts sync is a nightly batch file. The MES downtime log has good timestamps but is not linked to work-order numbers. There is no API gateway; the CMMS has a read-only SQL view and a limited REST endpoint for creating notes.\n\nWe want a narrow multi-agent pilot that reads open exceptions each morning, checks parts status against the ERP, flags likely misclassified priorities with a short justification, and drafts a ranked triage list for the planner. A planner must approve any priority change or escalation. Nothing is closed or reprioritized automatically.\n\nConstraints: 90-day pilot, capped budget, two reliability engineers part-time, plant data must stay in our approved environment, technicians are skeptical of another tool. Success means fewer SLA misses and faster triage, not headcount reduction.",
+  "company_name": "Red River Components",
+  "role_title": "Director of Maintenance & Reliability",
+  "industry": "Manufacturing",
+  "company_size": "Mid-size",
+  "primary_systems": "On-prem CMMS (work orders, asset register, PM schedules); ERP inventory and purchasing module; MES downtime log; shared maintenance inbox",
+  "constraints": "90-day pilot; capped pilot budget; no autonomous work-order closure or priority changes without a planner approving; plant data stays in our approved environment; 2 reliability engineers part-time",
+  "success_metric": "Cut SLA-missed P1/P2 work orders from 18% to under 10% in 90 days, and triage time per exception from ~20 min to under 5 min",
+  "checklist": [
+    {
+      "question_id": "access_data_quality",
+      "value": 2
+    },
+    {
+      "question_id": "access_unified_apis",
+      "value": 2
+    },
+    {
+      "question_id": "access_pii_governance",
+      "value": 3
+    },
+    {
+      "question_id": "access_latency_freshness",
+      "value": 3
+    },
+    {
+      "question_id": "access_integrations",
+      "value": 2
+    },
+    {
+      "question_id": "adapt_ai_strategy",
+      "value": 2
+    },
+    {
+      "question_id": "adapt_talent_partners",
+      "value": 3
+    },
+    {
+      "question_id": "adapt_change_management",
+      "value": 2
+    },
+    {
+      "question_id": "adapt_exec_sponsorship",
+      "value": 4
+    },
+    {
+      "question_id": "adapt_pilot_budget",
+      "value": 3
+    },
+    {
+      "question_id": "adopt_security_compliance",
+      "value": 3
+    },
+    {
+      "question_id": "adopt_observability",
+      "value": 2
+    },
+    {
+      "question_id": "adopt_human_in_loop",
+      "value": 3
+    },
+    {
+      "question_id": "adopt_eval_testing",
+      "value": 1
+    },
+    {
+      "question_id": "adopt_production_ownership",
+      "value": 2
+    }
+  ]
+}

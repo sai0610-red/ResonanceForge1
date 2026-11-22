@@ -30,7 +30,22 @@
     weaknessesList: $("weaknessesList"),
     risksList: $("risksList"),
     recsList: $("recsList"),
+    scaffoldBadge: $("scaffoldBadge"),
+    scaffoldDetail: $("scaffoldDetail"),
+    pilotBtn: $("downloadPilotBtn"),
+    pilotMsg: $("pilotMsg"),
   };
+
+  const TOKEN_KEY = "rf_demo_token";
+  let currentId = null;
+
+  function getToken() {
+    try {
+      return (localStorage.getItem(TOKEN_KEY) || "").trim();
+    } catch (_) {
+      return "";
+    }
+  }
 
   let lastCode = "";
 
@@ -123,9 +138,71 @@
     fillList(document.getElementById("briefPlan"), op.ninety_day_plan || []);
     const breaks = (report.pilot && report.pilot.what_breaks_first) || op.top_gaps || d.top_gaps || [];
     fillList(document.getElementById("briefBreaks"), breaks.slice(0, 6));
-    const pilotBtn = document.getElementById("downloadPilotBtn");
-    if (pilotBtn && assessmentId) {
-      pilotBtn.href = "/api/assessments/" + encodeURIComponent(assessmentId) + "/pilot.zip";
+    if (assessmentId) currentId = assessmentId;
+  }
+
+  function renderScaffoldCheck(sc) {
+    if (!els.scaffoldBadge) return;
+    if (!sc) {
+      setHidden(els.scaffoldBadge, true);
+      setHidden(els.scaffoldDetail, true);
+      return;
+    }
+    els.scaffoldBadge.textContent = sc.ok ? "Compile check: PASS" : "Compile check: FAIL";
+    els.scaffoldBadge.className = "badge scaffold-badge " + (sc.ok ? "pass" : "fail");
+    els.scaffoldBadge.title = sc.error || "ast.parse + compile() succeeded (not executed)";
+    const parts = [
+      (sc.lines || 0) + " lines",
+      "StateGraph " + (sc.has_stategraph ? "found" : "missing"),
+      ".compile() " + (sc.has_compile ? "found" : "missing"),
+    ];
+    if (sc.error) parts.push(sc.error);
+    els.scaffoldDetail.textContent = "Static check only (parsed and compiled, not executed): " + parts.join(" · ");
+    setHidden(els.scaffoldBadge, false);
+    setHidden(els.scaffoldDetail, false);
+  }
+
+  function showPilotMsg(msg) {
+    if (!els.pilotMsg) return;
+    els.pilotMsg.textContent = msg || "";
+    setHidden(els.pilotMsg, !msg);
+  }
+
+  async function downloadPilot() {
+    if (!currentId) return;
+    showPilotMsg("");
+    const headers = {};
+    const token = getToken();
+    if (token) headers["X-Demo-Token"] = token;
+    try {
+      // fetch + blob so X-Demo-Token is sent (a plain link would drop the header).
+      const res = await fetch(
+        "/api/assessments/" + encodeURIComponent(currentId) + "/pilot.zip",
+        { headers: headers }
+      );
+      if (res.status === 401) {
+        showPilotMsg("The pilot download needs the demo token. Open the main app, paste the token in 'Demo token', then retry here.");
+        return;
+      }
+      if (res.status === 429) {
+        showPilotMsg("Rate limit reached. Try again later.");
+        return;
+      }
+      if (!res.ok) {
+        showPilotMsg("Pilot download failed (status " + res.status + ").");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "resonanceforge-pilot-" + currentId + ".zip";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      showPilotMsg("Pilot download failed: " + (err && err.message ? err.message : String(err)));
     }
   }
 
@@ -207,6 +284,7 @@
     els.codeExplanation.textContent = g.explanation;
     lastCode = g.code || "";
     els.codeBlock.innerHTML = simpleHighlight(lastCode);
+    renderScaffoldCheck(report.scaffold_check);
 
     fillList(els.strengthsList, c.strengths);
     fillList(els.weaknessesList, c.weaknesses);
@@ -262,6 +340,8 @@
       setHidden(els.errorPanel, false);
     }
   }
+
+  if (els.pilotBtn) els.pilotBtn.addEventListener("click", downloadPilot);
 
   els.copyCodeBtn.addEventListener("click", async () => {
     if (!lastCode) return;
