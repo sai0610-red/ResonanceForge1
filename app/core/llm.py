@@ -32,6 +32,14 @@ _RETRYABLE_NAMES = {
     "WriteTimeout",
 }
 _RETRYABLE_STATUS = {408, 409, 425, 429, 500, 502, 503, 504, 529}
+# Bedrock (botocore ClientError) error codes.
+_AWS_RATE_LIMIT_CODES = {"ThrottlingException", "TooManyRequestsException"}
+_AWS_RETRYABLE_CODES = _AWS_RATE_LIMIT_CODES | {
+    "ServiceUnavailableException",
+    "InternalServerException",
+    "ModelNotReadyException",
+    "ModelTimeoutException",
+}
 
 # Backoff used for rate limits when the provider gives no hint (seconds).
 _RATE_LIMIT_BACKOFF = (5.0, 15.0, 30.0)
@@ -56,9 +64,16 @@ class LLMUnavailable(Exception):
     """Raised after retries are exhausted. Message is safe to show to a client."""
 
 
-def get_llm(model: str | None = None) -> ChatGroq:
-    """Return a ChatGroq client. Timeouts come from settings; retries are handled here."""
+def get_llm(model: str | None = None) -> Any:
+    """Chat model for LLM_PROVIDER (groq | bedrock).
+
+    Timeouts come from settings. SDK-level retries are off on both providers;
+    `invoke_with_retry` owns retries so 429 handling and SSE wait events stay
+    the same whichever provider is active.
+    """
     settings = get_settings()
+    if settings.provider == "bedrock":
+        return _bedrock_llm(model or settings.bedrock_model_id)
     return ChatGroq(
         model=model or settings.groq_model,
         api_key=settings.groq_api_key,
@@ -66,6 +81,37 @@ def get_llm(model: str | None = None) -> ChatGroq:
         request_timeout=settings.llm_timeout_seconds,
         max_retries=0,
     )
+
+
+def _bedrock_llm(model_id: str) -> Any:
+    """ChatBedrockConverse on the default AWS credential chain (no keys in settings)."""
+    try:
+        from botocore.config import Config
+        from langchain_aws import ChatBedrockConverse
+    except ImportError as exc:  # optional dependency
+        raise LLMUnavailable(
+            "LLM_PROVIDER=bedrock needs the AWS extras: pip install -r requirements-aws.txt"
+        ) from exc
+    settings = get_settings()
+    timeout = settings.llm_timeout_seconds
+    return ChatBedrockConverse(
+        model=model_id,
+        region_name=settings.aws_region,
+        temperature=settings.temperature,
+        config=Config(
+            connect_timeout=min(10.0, timeout),
+            read_timeout=timeout,
+            retries={"max_attempts": 1, "mode": "standard"},
+        ),
+    )
+
+
+def _aws_error_code(exc: BaseException) -> str | None:
+    response = getattr(exc, "response", None)
+    if isinstance(response, dict):
+        code = (response.get("Error") or {}).get("Code")
+        return str(code) if code else None
+    return None
 
 
 def fallback_llm(schema: Any) -> Any | None:
@@ -89,6 +135,8 @@ def wait_listener(callback: WaitListener) -> Iterator[None]:
 def is_retryable(exc: BaseException) -> bool:
     if isinstance(exc, (TimeoutError, ConnectionError)):
         return True
+    if _aws_error_code(exc) in _AWS_RETRYABLE_CODES:
+        return True
     status = getattr(exc, "status_code", None)
     if status in _RETRYABLE_STATUS:
         return True
@@ -97,6 +145,8 @@ def is_retryable(exc: BaseException) -> bool:
 
 def is_rate_limit(exc: BaseException) -> bool:
     if getattr(exc, "status_code", None) == 429:
+        return True
+    if _aws_error_code(exc) in _AWS_RATE_LIMIT_CODES:
         return True
     return "ratelimit" in exc.__class__.__name__.lower()
 
@@ -138,7 +188,7 @@ def user_message(exc: BaseException) -> str:
     status = getattr(exc, "status_code", None)
     name = exc.__class__.__name__.lower()
     raw = str(exc).lower()
-    if status == 429 or "rate limit" in raw or "ratelimit" in name:
+    if status == 429 or "rate limit" in raw or "ratelimit" in name or is_rate_limit(exc):
         return "The language model is rate-limited right now. Please wait a minute and retry."
     if (
         isinstance(exc, TimeoutError)

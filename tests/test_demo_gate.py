@@ -129,7 +129,7 @@ def test_public_endpoints_stay_public(client):
     h = client.get("/health")
     assert h.status_code == 200
     body = h.json()
-    assert set(body) == {"status", "env", "db_ok", "model"}
+    assert set(body) == {"status", "env", "db_ok", "provider", "model"}
     assert body["db_ok"] is True
     assert "test-key-not-real" not in h.text and TOKEN not in h.text
     assert client.get("/").status_code == 200

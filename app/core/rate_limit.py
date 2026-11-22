@@ -40,7 +40,7 @@ class SlidingWindowRateLimiter:
             self._hits.clear()
 
 
-def client_ip(request: Request, trusted_proxy: bool = False) -> str:
+def client_ip(request: Request, trusted_proxy: bool = False, hop: str = "first") -> str:
     """Return the rate-limit key for this request.
 
     When ``trusted_proxy`` is false (the default), only the TCP peer address
@@ -50,10 +50,14 @@ def client_ip(request: Request, trusted_proxy: bool = False) -> str:
     When ``trusted_proxy`` is true, the first (left-most) hop in
     ``X-Forwarded-For`` is used, falling back to the TCP peer. Enable this
     only behind a platform proxy (Fly, Railway) that overwrites the header.
+
+    ``hop="last"`` uses the right-most entry instead. Use it behind an AWS ALB,
+    which appends the address it saw to whatever the client sent, so only the
+    last entry is trustworthy.
     """
     if trusted_proxy:
         forwarded = request.headers.get("x-forwarded-for") or ""
-        first = forwarded.split(",")[0].strip()
-        if first:
-            return first[:128]
+        parts = [p.strip() for p in forwarded.split(",") if p.strip()]
+        if parts:
+            return (parts[-1] if hop == "last" else parts[0])[:128]
     return (request.client.host if request.client else None) or "unknown"

@@ -14,7 +14,7 @@ people who should be able to run assessments.
 - A **persistent volume mounted at `/app/data`** (`DATA_DIR=/app/data`). It
   holds the SQLite DB (`resonanceforge.db`, plus `-wal`/`-shm` when WAL is
   active) and pilot zips (`pilots/`).
-- Health check: `GET /health` returns `{"status","env","db_ok","model"}` (no secrets)
+- Health check: `GET /health` returns `{"status","env","db_ok","provider","model"}` (no secrets)
   and an `X-Request-ID` header.
 - The container runs as a non-root user (uid 10001). The entrypoint chowns
   `DATA_DIR` if it starts as root, then drops privileges.
