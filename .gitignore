@@ -19,3 +19,4 @@ data/pilots/*.zip
 *.db
 data/pilots/
 *.zip
+.ruff_cache/

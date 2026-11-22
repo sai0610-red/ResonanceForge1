@@ -10,7 +10,6 @@ from typing import List, Optional
 from app.core.config import get_settings
 from app.models.schemas import (
     ArchitectureResult,
-    CodeGenerationResult,
     CritiqueResult,
     DiagnosisResult,
     PilotPackageInfo,

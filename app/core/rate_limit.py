@@ -8,6 +8,8 @@ import time
 from collections import defaultdict, deque
 from typing import Deque, Dict, Optional, Tuple
 
+from starlette.requests import Request
+
 
 class SlidingWindowRateLimiter:
     def __init__(self, window_seconds: float = 3600.0) -> None:
@@ -36,3 +38,22 @@ class SlidingWindowRateLimiter:
     def reset(self) -> None:
         with self._lock:
             self._hits.clear()
+
+
+def client_ip(request: Request, trusted_proxy: bool = False) -> str:
+    """Return the rate-limit key for this request.
+
+    When ``trusted_proxy`` is false (the default), only the TCP peer address
+    is used. ``X-Forwarded-For`` is ignored so a client cannot spoof their IP
+    and bypass the limit.
+
+    When ``trusted_proxy`` is true, the first (left-most) hop in
+    ``X-Forwarded-For`` is used, falling back to the TCP peer. Enable this
+    only behind a platform proxy (Fly, Railway) that overwrites the header.
+    """
+    if trusted_proxy:
+        forwarded = request.headers.get("x-forwarded-for") or ""
+        first = forwarded.split(",")[0].strip()
+        if first:
+            return first[:128]
+    return (request.client.host if request.client else None) or "unknown"

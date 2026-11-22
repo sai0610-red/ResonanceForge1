@@ -5,10 +5,14 @@ from __future__ import annotations
 import hmac
 import json
 import logging
+import re
+import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Generator, Optional
+from typing import Any, AsyncIterator, Generator, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -17,12 +21,14 @@ from app.agents.architect import run_architect
 from app.agents.code_generator import run_code_generator
 from app.agents.critic import run_critic
 from app.agents.diagnostician import run_diagnostician
-from app.core.agent_log import agent_timer, configure_logging
+from app.core.agent_log import agent_timer, configure_logging, request_id_var
 from app.core.config import get_settings
-from app.core.rate_limit import SlidingWindowRateLimiter
+from app.core.llm import LLMUnavailable
+from app.core.rate_limit import SlidingWindowRateLimiter, client_ip
 from app.graphs.resonance_graph import run_assessment
 from app.models.schemas import AssessRequest, ResonanceReport, ScaffoldCheck
 from app.rubric.checklist import get_checklist_payload
+from app.services.context import gap_summary_from_diagnosis
 from app.services.one_pager import build_one_pager, one_pager_sections
 from app.services.pilot_package import attach_pilot, pilot_zip_path
 from app.services.report import to_markdown
@@ -36,27 +42,75 @@ logger = logging.getLogger("resonanceforge.api")
 # Per-IP sliding window for assessment-creating endpoints (in-memory).
 rate_limiter = SlidingWindowRateLimiter(window_seconds=3600)
 
-app = FastAPI(
-    title="ResonanceForge",
-    description="Multi-agent AI readiness assessment platform",
-    version="1.2.0",
-)
-
-
-@app.on_event("startup")
-def _startup() -> None:
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
-    configure_logging(settings.log_level)
+    configure_logging(settings.log_level, settings.log_format)
     # Raises RuntimeError (app refuses to start) in production without secrets.
     settings.validate_for_startup()
     db.ensure_db()
     logger.info(
-        "startup env=%s model=%s demo_token_required=%s rate_limit_per_hour=%d data_dir=%s",
+        "startup env=%s model=%s demo_token_required=%s rate_limit_per_hour=%d "
+        "trusted_proxy=%s data_dir=%s",
         settings.env,
         settings.groq_model,
         bool(settings.demo_token),
         settings.rate_limit_per_hour,
+        settings.trusted_proxy,
         settings.data_path,
+    )
+    yield
+
+
+app = FastAPI(
+    title="ResonanceForge",
+    description="Multi-agent AI readiness assessment platform",
+    version="1.3.0",
+    lifespan=lifespan,
+)
+
+_REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._\-]{1,128}$")
+
+
+@app.middleware("http")
+async def request_context(request: Request, call_next):
+    """Attach a request id and security headers to every response."""
+    incoming = (request.headers.get("x-request-id") or "").strip()
+    rid = incoming if _REQUEST_ID_RE.fullmatch(incoming) else str(uuid.uuid4())
+    request.state.request_id = rid
+    token = request_id_var.set(rid)
+    try:
+        response = await call_next(request)
+    finally:
+        request_id_var.reset(token)
+    response.headers["X-Request-ID"] = rid
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault(
+        "Permissions-Policy", "camera=(), microphone=(), geolocation=()"
+    )
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'",
+    )
+    if get_settings().is_production:
+        response.headers.setdefault(
+            "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+        )
+    return response
+
+
+_cors_origins = get_settings().cors_origin_list
+if _cors_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors_origins,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type", "X-Demo-Token", "X-Request-ID"],
+        expose_headers=["X-Request-ID", "X-Assessment-Id", "Retry-After"],
     )
 
 
@@ -76,7 +130,7 @@ def require_demo_token(
 
 
 def _client_ip(request: Request) -> str:
-    return (request.client.host if request.client else None) or "unknown"
+    return client_ip(request, trusted_proxy=get_settings().trusted_proxy)
 
 
 def _enforce_rate_limit(request: Request) -> None:
@@ -140,6 +194,8 @@ def _ensure_groq_configured() -> None:
 
 
 def _map_assessment_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, LLMUnavailable):
+        return HTTPException(status_code=502, detail=str(exc))
     message = str(exc) or exc.__class__.__name__
     lower = message.lower()
     if any(
@@ -152,13 +208,14 @@ def _map_assessment_error(exc: Exception) -> HTTPException:
             "groq",
         )
     ):
+        # Never echo provider error text — it can include credentials.
         return HTTPException(
             status_code=502,
-            detail=f"LLM provider error: {message}",
+            detail="LLM provider error. Check GROQ_API_KEY and try again.",
         )
     return HTTPException(
         status_code=502,
-        detail=f"Assessment failed: {message}",
+        detail="Assessment failed. Please retry; if it persists, check the server logs.",
     )
 
 
@@ -376,6 +433,7 @@ def api_assess_stream(body: AssessRequest, request: Request):
                     "partial": {"diagnosis": diagnosis.model_dump()},
                 },
             )
+            gap_summary = gap_summary_from_diagnosis(diagnosis)
 
             yield _sse(
                 "step",
@@ -392,6 +450,7 @@ def api_assess_stream(body: AssessRequest, request: Request):
                 run_architect,
                 question=question,
                 diagnosis=diagnosis,
+                checklist_gap_summary=gap_summary,
                 **intake,
             )
             yield _sse(
@@ -421,6 +480,7 @@ def api_assess_stream(body: AssessRequest, request: Request):
                 question=question,
                 diagnosis=diagnosis,
                 architecture=architecture,
+                checklist_gap_summary=gap_summary,
                 **intake,
             )
             yield _sse(
@@ -457,6 +517,7 @@ def api_assess_stream(body: AssessRequest, request: Request):
                 diagnosis=diagnosis,
                 architecture=architecture,
                 generated_code=generated_code,
+                checklist_gap_summary=gap_summary,
                 **intake,
             )
             yield _sse(
@@ -493,9 +554,10 @@ def api_assess_stream(body: AssessRequest, request: Request):
                 },
             )
         except Exception as exc:
-            message = str(exc) or exc.__class__.__name__
+            mapped = _map_assessment_error(exc)
+            message = mapped.detail if isinstance(mapped.detail, str) else "Assessment failed"
             try:
-                db.update_status(assessment_id, "failed", error=message)
+                db.update_status(assessment_id, "failed", error=exc.__class__.__name__)
             except Exception:
                 pass
             yield _sse("error", {"detail": message, "id": assessment_id})
