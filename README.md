@@ -1,5 +1,6 @@
 # ResonanceForge
 
+[![CI](https://github.com/sai0610-red/ResonanceForge1/actions/workflows/ci.yml/badge.svg)](https://github.com/sai0610-red/ResonanceForge1/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-navy.svg)](LICENSE)
 
 Assess whether a team is ready to put agents on **one** workflow, then produce a leadership 1-pager and a starter LangGraph scaffold.
