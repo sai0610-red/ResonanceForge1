@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, AsyncIterator, Generator, Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -30,6 +30,7 @@ from app.core.config import get_settings
 from app.core.llm import LLMUnavailable, wait_listener
 from app.core.rate_limit import SlidingWindowRateLimiter, client_ip
 from app.graphs.resonance_graph import run_assessment
+from app.rag import service as rag
 from app.models.schemas import AssessRequest, ResonanceReport, ScaffoldCheck
 from app.rubric.checklist import get_checklist_payload
 from app.services.context import gap_summary_from_diagnosis
@@ -45,6 +46,8 @@ logger = logging.getLogger("resonanceforge.api")
 
 # Per-IP sliding window for assessment-creating endpoints (in-memory).
 rate_limiter = SlidingWindowRateLimiter(window_seconds=3600)
+# Separate, looser window for document uploads (no LLM cost, but CPU + disk).
+upload_limiter = SlidingWindowRateLimiter(window_seconds=3600)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -149,6 +152,14 @@ def _enforce_rate_limit(request: Request) -> None:
             ),
             headers={"Retry-After": str(retry_after)},
         )
+
+
+def _load_grounding(body: AssessRequest) -> rag.Grounding:
+    """422 for an unknown document_set_id, before the assessment row or any LLM call."""
+    try:
+        return rag.load(body.document_set_id)
+    except rag.DocumentError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 def _validated_question(body: AssessRequest) -> str:
@@ -315,6 +326,7 @@ def api_get_assessment(assessment_id: str):
         "report": _report_with_scaffold_check(row.get("report")),
         "error": row.get("error"),
         "share_token": row.get("share_token"),
+        "document_set_id": row.get("document_set_id"),
         "one_pager": (
             one_pager_sections(
                 ResonanceReport.model_validate(row["report"]),
@@ -452,11 +464,13 @@ def api_assess_stream(body: AssessRequest, request: Request):
     _enforce_rate_limit(request)
     intake = _intake_from_body(body)
     checklist = _checklist_from_body(body)
+    grounding = _load_grounding(body)
 
     assessment_id = db.create_assessment(
         question=question,
         status="running",
         checklist=checklist,
+        document_set_id=grounding.document_set_id,
         **intake,
     )
 
@@ -478,6 +492,11 @@ def api_assess_stream(body: AssessRequest, request: Request):
                 run_diagnostician,
                 question=question,
                 checklist=checklist,
+                passages=(
+                    rag.passages_block(rag.retrieve_for_diagnosis(grounding, question, intake))
+                    if rag.needs_llm_diagnosis(checklist)
+                    else None
+                ),
                 **intake,
             )
             yield _sse(
@@ -509,8 +528,14 @@ def api_assess_stream(body: AssessRequest, request: Request):
                 question=question,
                 diagnosis=diagnosis,
                 checklist_gap_summary=gap_summary,
+                passages=rag.passages_block(
+                    rag.retrieve_for_architect(grounding, question, intake, diagnosis)
+                ),
                 **intake,
             )
+            # Drop citations that do not point at a retrieved chunk before anything
+            # downstream (UI, code generator, critic) sees the text.
+            diagnosis, architecture, evidence = rag.ground(grounding, diagnosis, architecture)
             yield _sse(
                 "step",
                 {
@@ -597,6 +622,7 @@ def api_assess_stream(body: AssessRequest, request: Request):
                 architecture=architecture,
                 generated_code=generated_code,
                 critique=critique,
+                evidence=evidence,
             )
             report = _finalize_report(
                 assessment_id,
@@ -641,11 +667,13 @@ def assess(body: AssessRequest, request: Request):
     _enforce_rate_limit(request)
     intake = _intake_from_body(body)
     checklist = _checklist_from_body(body)
+    grounding = _load_grounding(body)
 
     assessment_id = db.create_assessment(
         question=question,
         status="running",
         checklist=checklist,
+        document_set_id=grounding.document_set_id,
         **intake,
     )
 
@@ -654,6 +682,7 @@ def assess(body: AssessRequest, request: Request):
             question=question,
             checklist=checklist,
             assessment_id=assessment_id,
+            grounding=grounding,
             **intake,
         )
         report = _finalize_report(
@@ -676,6 +705,72 @@ def assess(body: AssessRequest, request: Request):
             assessment_id, "failed", error=str(exc) or exc.__class__.__name__
         )
         raise _map_assessment_error(exc) from exc
+
+
+def _enforce_upload_rate_limit(request: Request) -> None:
+    limit = get_settings().upload_rate_limit_per_hour
+    allowed, retry_after = upload_limiter.check(_client_ip(request), limit)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Upload rate limit exceeded: {limit} per hour. Retry in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+
+@app.post("/api/documents", dependencies=[Depends(require_demo_token)])
+async def api_upload_documents(request: Request, files: list[UploadFile] = File(...)):
+    """Upload customer docs (txt / md / pdf) for grounding. Returns a document_set_id.
+
+    Pass that id as `document_set_id` on POST /assess or /api/assessments/stream.
+    Only extracted text and chunks are stored; the raw bytes are discarded.
+    """
+    _enforce_upload_rate_limit(request)
+    settings = get_settings()
+    if len(files) > settings.rag_max_files:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Too many files ({len(files)}); maximum is {settings.rag_max_files}",
+        )
+    payload: list[tuple[str, bytes]] = []
+    for upload in files:
+        # Read one byte past the limit so an oversize file is rejected without
+        # holding more than max+1 bytes per file in memory.
+        data = await upload.read(settings.rag_max_file_bytes + 1)
+        await upload.close()
+        payload.append((upload.filename or "document", data))
+    try:
+        record = rag.ingest(payload)
+    except rag.DocumentError as exc:
+        raise HTTPException(status_code=exc.status, detail=str(exc)) from exc
+    logger.info(
+        "documents_uploaded set_id=%s files=%d chunks=%d",
+        record["id"],
+        len(record["documents"]),
+        sum(d["chunks"] for d in record["documents"]),
+    )
+    return {"document_set_id": record["id"], **record}
+
+
+@app.get("/api/documents/{set_id}", dependencies=[Depends(require_demo_token)])
+def api_get_documents(set_id: str):
+    """Metadata for an uploaded set (labels, filenames, sizes, chunk counts)."""
+    record = db.get_document_set(set_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Document set not found")
+    return {
+        "document_set_id": record["id"],
+        "created_at": record["created_at"],
+        "documents": [
+            {
+                "label": d["label"],
+                "filename": d["filename"],
+                "char_count": d["char_count"],
+                "chunks": len(d["chunks"]),
+            }
+            for d in record["documents"]
+        ],
+    }
 
 
 @app.get("/assess/{unused}")

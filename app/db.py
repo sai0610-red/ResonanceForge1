@@ -79,6 +79,31 @@ def ensure_db() -> None:
         cols = {row[1] for row in conn.execute("PRAGMA table_info(assessments)").fetchall()}
         if "checklist_json" not in cols:
             conn.execute("ALTER TABLE assessments ADD COLUMN checklist_json TEXT")
+        if "document_set_id" not in cols:
+            conn.execute("ALTER TABLE assessments ADD COLUMN document_set_id TEXT")
+        # Customer documents (optional RAG grounding). Extracted text + chunks only.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS document_sets (
+                id TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS documents (
+                id TEXT PRIMARY KEY,
+                set_id TEXT NOT NULL REFERENCES document_sets(id) ON DELETE CASCADE,
+                label TEXT NOT NULL,
+                filename TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                char_count INTEGER NOT NULL,
+                chunks_json TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_documents_set ON documents(set_id)")
         conn.commit()
         _initialized = db_path
     finally:
@@ -120,6 +145,7 @@ def create_assessment(
     success_metric: Optional[str] = None,
     checklist: Optional[list] = None,
     status: str = "pending",
+    document_set_id: Optional[str] = None,
 ) -> str:
     """Insert a new assessment row; return its id (also used as share_token)."""
     assessment_id = _new_id()
@@ -145,8 +171,8 @@ def create_assessment(
                 id, created_at, status,
                 company_name, industry, company_size, role_title,
                 primary_systems, constraints, success_metric, question,
-                report_json, error, share_token, checklist_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+                report_json, error, share_token, checklist_json, document_set_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)
             """,
             (
                 assessment_id,
@@ -162,6 +188,7 @@ def create_assessment(
                 question,
                 assessment_id,
                 checklist_json,
+                document_set_id,
             ),
         )
         conn.commit()
@@ -270,4 +297,83 @@ def _row_to_summary(row: sqlite3.Row) -> dict[str, Any]:
         "question_preview": preview,
         "overall_readiness": overall_readiness,
         "verdict": verdict,
+    }
+
+
+# --- customer documents (RAG) ---
+
+
+def create_document_set(documents: list[dict[str, Any]]) -> dict[str, Any]:
+    """Store extracted documents as one set. Each item: filename, text, chunks (list[str]).
+
+    Returns {"id", "created_at", "documents": [{label, filename, char_count, chunks}]}.
+    """
+    set_id = _new_id()
+    created_at = _utc_now_iso()
+    out = []
+    with _connect() as conn:
+        conn.execute(
+            "INSERT INTO document_sets (id, created_at) VALUES (?, ?)", (set_id, created_at)
+        )
+        for i, doc in enumerate(documents, 1):
+            label = f"D{i}"
+            chunks = list(doc["chunks"])
+            conn.execute(
+                """
+                INSERT INTO documents (id, set_id, label, filename, created_at,
+                                       char_count, chunks_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    _new_id(),
+                    set_id,
+                    label,
+                    doc["filename"],
+                    created_at,
+                    len(doc["text"]),
+                    json.dumps(chunks),
+                ),
+            )
+            out.append(
+                {
+                    "label": label,
+                    "filename": doc["filename"],
+                    "char_count": len(doc["text"]),
+                    "chunks": len(chunks),
+                }
+            )
+        conn.commit()
+    return {"id": set_id, "created_at": created_at, "documents": out}
+
+
+def get_document_set(set_id: str) -> Optional[dict[str, Any]]:
+    """Return {"id", "created_at", "documents": [{label, filename, char_count, chunks}]}
+
+    where chunks is the list of chunk texts, or None when the set does not exist.
+    """
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT id, created_at FROM document_sets WHERE id = ?", (set_id,)
+        ).fetchone()
+        if row is None:
+            return None
+        docs = conn.execute(
+            """
+            SELECT label, filename, char_count, chunks_json FROM documents
+            WHERE set_id = ? ORDER BY CAST(SUBSTR(label, 2) AS INTEGER)
+            """,
+            (set_id,),
+        ).fetchall()
+    return {
+        "id": row["id"],
+        "created_at": row["created_at"],
+        "documents": [
+            {
+                "label": d["label"],
+                "filename": d["filename"],
+                "char_count": d["char_count"],
+                "chunks": json.loads(d["chunks_json"]),
+            }
+            for d in docs
+        ],
     }
