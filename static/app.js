@@ -18,6 +18,7 @@
     runBtn: $("runBtn"),
     progressPanel: $("progressPanel"),
     stepsList: $("stepsList"),
+    stepStatus: $("stepStatus"),
     errorPanel: $("errorPanel"),
     errorMessage: $("errorMessage"),
     emptyPanel: $("emptyPanel"),
@@ -146,7 +147,14 @@
     return "";
   }
 
+  function setStepStatus(text) {
+    if (!els.stepStatus) return;
+    els.stepStatus.textContent = text || "";
+    setHidden(els.stepStatus, !text);
+  }
+
   function resetSteps() {
+    setStepStatus("");
     els.stepsList.querySelectorAll(".step").forEach((s) => {
       s.classList.remove("active", "done");
     });
@@ -540,8 +548,12 @@
       for (const ev of parsed.events) {
         if (ev.event === "step" && ev.data && ev.data.step) {
           setStep(Number(ev.data.step));
+          setStepStatus("");
           if (ev.data.id) lastAssessmentId = ev.data.id;
+        } else if (ev.event === "status" && ev.data) {
+          setStepStatus(ev.data.label || "Waiting on the model…");
         } else if (ev.event === "complete") {
+          setStepStatus("");
           completed = ev.data;
           if (ev.data && ev.data.one_pager) lastOnePager = ev.data.one_pager;
         } else if (ev.event === "error") {

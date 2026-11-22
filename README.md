@@ -80,6 +80,9 @@ Copy `.env.example` to `.env`. Never commit `.env`.
 | `LLM_TIMEOUT_SECONDS` | `60` | Per-call timeout |
 | `LLM_MAX_RETRIES` | `2` | Retries after the first attempt, with backoff |
 | `LLM_RETRY_BACKOFF_SECONDS` | `1` | Initial backoff (then 2x, 4x, …) |
+| `LLM_RATE_LIMIT_BUDGET_SECONDS` | `90` | Total wait across 429 retries per call; honors Groq's Retry-After / "try again in Xs" |
+| `LLM_FALLBACK_MODEL` | *(empty)* | Optional model tried once after rate-limit retries run out (e.g. `openai/gpt-oss-20b`) |
+| `CRITIC_MAX_CODE_CHARS` | `8000` | Generated code longer than this is trimmed (head + tail) before the critic reviews it |
 
 `GET /health` returns `{"status","env","db_ok","model"}` and an `X-Request-ID` header. No secrets. Logs are JSON lines (`request_id`, `assessment_id`, `agent`, `latency_ms`, `ok`). The demo token and API key are never logged.
 
@@ -109,6 +112,7 @@ This repo is deploy-ready; nothing is deployed automatically.
 - **In-memory rate limit** resets on restart. Behind a proxy, leave `TRUSTED_PROXY=false` unless the platform sets `X-Forwarded-For`.
 - **Share links are public** and have no expiry or revocation. IDs are random UUID4s.
 - **Demo token is a shared secret**, not per-user auth. No SSO, no multi-tenant isolation.
+- **Groq free tier is ~8,000 tokens/minute** for `openai/gpt-oss-120b`. One run makes up to three LLM calls in under a minute, so the Critic can hit the limit. The app waits for Groq's reset hint (the UI shows "Waiting on model rate limit") instead of failing, which can add up to a minute to a run. A paid Groq tier removes the wait.
 - No RAG grounding, no human-in-the-loop UI, no billing. Requires a valid Groq API key.
 
 ## Tests
@@ -122,6 +126,7 @@ make lint          # ruff check app tests
 - `tests/test_scaffold_check.py` — compile-check (valid, syntax error, fences, empty; never executes)
 - `tests/test_demo_gate.py` — 401 / public routes / 422 / 429 / production startup guard
 - `tests/test_hardening.py` — request IDs, security headers, trusted-proxy rate limit, LLM retry, stream gap summary, WAL
+- `tests/test_llm_rate_limit.py` — Groq 429 handling: retry-after hints, backoff budget, fallback model, SSE wait status, critic code trimming
 
 The same lint + test commands are what CI should run on every push and pull request. No test makes a live Groq call.
 
@@ -136,7 +141,7 @@ The same lint + test commands are what CI should run on every push and pull requ
 | `GET` | `/api/reports/{id}` | public | Completed report JSON (share page) |
 | `GET` | `/r/{id}` | public | Share page HTML |
 | `POST` | `/assess` | token + rate limit | Sync assessment (`X-Assessment-Id`) |
-| `POST` | `/api/assessments/stream` | token + rate limit | SSE (`event: step` / `complete` / `error`) |
+| `POST` | `/api/assessments/stream` | token + rate limit | SSE (`event: step` / `status` / `complete` / `error`) |
 | `GET` | `/api/assessments` | token | History list |
 | `GET` | `/api/assessments/{id}` | token | Full record |
 | `GET` | `/api/assessments/{id}/pilot.zip` | token | Runnable Docker pilot |

@@ -1,6 +1,7 @@
 """Critic agent — reviews diagnosis, architecture, and generated code."""
 
-from app.core.llm import get_llm, invoke_with_retry
+from app.core.config import get_settings
+from app.core.llm import fallback_llm, get_llm, invoke_with_retry
 from app.models.schemas import (
     ArchitectureResult,
     CodeGenerationResult,
@@ -23,6 +24,24 @@ Be candid. Do not rubber-stamp Low-readiness situations as ready for pilot.
 
 Weigh checklist gaps and primary systems heavily in risks and final_verdict.
 """
+
+
+def code_for_review(code: str, max_chars: int) -> str:
+    """Cap generated code so the critic request fits a tokens-per-minute budget.
+
+    Keeps the head and tail (imports/state and graph wiring/compile) and marks the cut.
+    """
+    code = code or ""
+    if max_chars <= 0 or len(code) <= max_chars:
+        return code
+    head = int(max_chars * 0.7)
+    tail = max_chars - head
+    omitted = code[head : len(code) - tail].count("\n")
+    return (
+        code[:head]
+        + f"\n# ... [{omitted} lines omitted for review length] ...\n"
+        + code[len(code) - tail :]
+    )
 
 
 def run_critic(
@@ -53,17 +72,19 @@ def run_critic(
         success_metric=success_metric,
         checklist_gap_summary=checklist_gap_summary,
     )
+    code = code_for_review(generated_code.code, get_settings().critic_max_code_chars)
     user_prompt = (
         f"{context}\n\n"
-        f"Diagnosis JSON:\n{diagnosis.model_dump_json(indent=2)}\n\n"
-        f"Architecture JSON:\n{architecture.model_dump_json(indent=2)}\n\n"
+        f"Diagnosis JSON:\n{diagnosis.model_dump_json()}\n\n"
+        f"Architecture JSON:\n{architecture.model_dump_json()}\n\n"
         f"Generated code explanation:\n{generated_code.explanation}\n\n"
-        f"Generated code:\n{generated_code.code}"
+        f"Generated code:\n{code}"
     )
 
     return invoke_with_retry(llm,
         [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
-        ]
+        ],
+        fallback=fallback_llm(CritiqueResult),
     )

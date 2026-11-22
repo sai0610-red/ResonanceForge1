@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from app.core.llm import get_llm, invoke_with_retry
+from app.core.llm import fallback_llm, get_llm, invoke_with_retry
 from app.models.schemas import DiagnosisResult
 from app.rubric.checklist import (
     answers_from_checklist_list,
@@ -75,7 +75,8 @@ def run_diagnostician(
         [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
-        ]
+        ],
+        fallback=fallback_llm(DiagnosisResult),
     )
     if not str(result.summary).startswith("Estimated without checklist"):
         result = result.model_copy(

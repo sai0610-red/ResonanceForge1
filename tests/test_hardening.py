@@ -328,6 +328,7 @@ def test_invoke_with_retry_stops_on_non_retryable(monkeypatch):
 
 def test_invoke_with_retry_friendly_rate_limit(monkeypatch):
     monkeypatch.setenv("LLM_MAX_RETRIES", "0")
+    monkeypatch.setenv("LLM_RATE_LIMIT_BUDGET_SECONDS", "0")
     monkeypatch.setenv("LLM_RETRY_BACKOFF_SECONDS", "0")
     get_settings.cache_clear()
 

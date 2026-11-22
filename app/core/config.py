@@ -43,6 +43,17 @@ class Settings(BaseSettings):
     llm_retry_backoff_seconds: float = Field(
         default=1.0, alias="LLM_RETRY_BACKOFF_SECONDS"
     )
+    # Total seconds to wait across rate-limit (429) retries for one LLM call.
+    # Honors the provider's Retry-After / "try again in Xs" hint. 0 disables.
+    llm_rate_limit_budget_seconds: float = Field(
+        default=90.0, alias="LLM_RATE_LIMIT_BUDGET_SECONDS"
+    )
+    # Optional model tried once after rate-limit retries are exhausted
+    # (e.g. openai/gpt-oss-20b, which has its own quota on Groq). Empty = off.
+    llm_fallback_model: str = Field(default="", alias="LLM_FALLBACK_MODEL")
+    # The critic sees the generated code; cap it so one request fits a free-tier
+    # tokens-per-minute budget.
+    critic_max_code_chars: int = Field(default=8000, alias="CRITIC_MAX_CODE_CHARS")
 
     @property
     def is_production(self) -> bool:
