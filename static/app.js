@@ -213,14 +213,13 @@
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
-    return escaped
-      .replace(
-        /\b(from|import|def|class|return|if|elif|else|for|while|with|as|try|except|raise|True|False|None|and|or|not|in|is|lambda|yield|async|await|pass|break|continue)\b/g,
-        '<span style="color:#7dd3fc">$1</span>'
-      )
-      .replace(/(#[^\n]*)/g, '<span style="color:#6b7280">$1</span>')
-      .replace(/("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/g, '<span style="color:#86efac">$1</span>')
-      .replace(/\b(\d+)\b/g, '<span style="color:#fcd34d">$1</span>');
+    // One pass so later rules never match inside spans inserted by earlier ones.
+    const tokenRe =
+      /("""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')|(#[^\n]*)|\b(from|import|def|class|return|if|elif|else|for|while|with|as|try|except|raise|True|False|None|and|or|not|in|is|lambda|yield|async|await|pass|break|continue)\b|\b(\d+)\b/g;
+    return escaped.replace(tokenRe, (m, str, comment, keyword) => {
+      const color = str ? "#86efac" : comment ? "#6b7280" : keyword ? "#7dd3fc" : "#fcd34d";
+      return '<span style="color:' + color + '">' + m + "</span>";
+    });
   }
 
   function renderScores(diagnosis) {
