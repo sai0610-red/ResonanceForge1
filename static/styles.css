@@ -294,6 +294,12 @@ textarea:focus, select:focus, input[type="text"]:focus {
   box-shadow: inset 0 0 0 1px rgba(45, 212, 191, 0.2);
 }
 
+.step-status {
+  margin: 10px 0 0;
+  font-size: 0.85rem;
+  color: var(--teal);
+}
+
 .step.done {
   border-color: rgba(52, 211, 153, 0.35);
   color: var(--ok);

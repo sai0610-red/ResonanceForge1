@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import contextvars
 import hmac
 import json
 import logging
+import queue
 import re
+import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, AsyncIterator, Generator, Optional
@@ -23,7 +27,7 @@ from app.agents.critic import run_critic
 from app.agents.diagnostician import run_diagnostician
 from app.core.agent_log import agent_timer, configure_logging, request_id_var
 from app.core.config import get_settings
-from app.core.llm import LLMUnavailable
+from app.core.llm import LLMUnavailable, wait_listener
 from app.core.rate_limit import SlidingWindowRateLimiter, client_ip
 from app.graphs.resonance_graph import run_assessment
 from app.models.schemas import AssessRequest, ResonanceReport, ScaffoldCheck
@@ -388,6 +392,58 @@ def _run_agent(assessment_id: str, agent: str, fn, **kwargs):
         return fn(**kwargs)
 
 
+_SSE_KEEPALIVE_SECONDS = 15.0
+
+
+def _run_agent_streaming(
+    assessment_id: str, step: int, agent: str, fn, **kwargs
+) -> Generator[str, None, Any]:
+    """Run one agent in a worker thread; yield SSE status/keepalive while it runs.
+
+    Use as `result = yield from _run_agent_streaming(...)`. When the LLM layer waits
+    on a provider rate limit, a `status` event tells the UI instead of looking frozen.
+    """
+    events: "queue.Queue[str]" = queue.Queue()
+
+    def on_wait(seconds: float, reason: str) -> None:
+        events.put(
+            _sse(
+                "status",
+                {
+                    "step": step,
+                    "name": agent,
+                    "id": assessment_id,
+                    "status": "waiting_rate_limit" if reason == "rate_limit" else reason,
+                    "wait_seconds": round(seconds, 1),
+                    "label": f"Waiting on model rate limit (~{round(seconds)}s)",
+                },
+            )
+        )
+
+    def target():
+        with wait_listener(on_wait):
+            return _run_agent(assessment_id, agent, fn, **kwargs)
+
+    ctx = contextvars.copy_context()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(ctx.run, target)
+        last_sent = time.monotonic()
+        while True:
+            try:
+                yield events.get(timeout=0.25)
+                last_sent = time.monotonic()
+            except queue.Empty:
+                if future.done():
+                    break
+                if time.monotonic() - last_sent >= _SSE_KEEPALIVE_SECONDS:
+                    # SSE comment line: keeps proxies from closing an idle stream.
+                    yield ": keepalive\n\n"
+                    last_sent = time.monotonic()
+        while not events.empty():
+            yield events.get_nowait()
+        return future.result()
+
+
 @app.post("/api/assessments/stream", dependencies=[Depends(require_demo_token)])
 def api_assess_stream(body: AssessRequest, request: Request):
     """Run assessment with SSE progress events; persist result + pilot zip."""
@@ -415,8 +471,9 @@ def api_assess_stream(body: AssessRequest, request: Request):
                     "id": assessment_id,
                 },
             )
-            diagnosis = _run_agent(
+            diagnosis = yield from _run_agent_streaming(
                 assessment_id,
+                1,
                 "diagnostician",
                 run_diagnostician,
                 question=question,
@@ -444,8 +501,9 @@ def api_assess_stream(body: AssessRequest, request: Request):
                     "id": assessment_id,
                 },
             )
-            architecture = _run_agent(
+            architecture = yield from _run_agent_streaming(
                 assessment_id,
+                2,
                 "architect",
                 run_architect,
                 question=question,
@@ -473,8 +531,9 @@ def api_assess_stream(body: AssessRequest, request: Request):
                     "id": assessment_id,
                 },
             )
-            generated_code = _run_agent(
+            generated_code = yield from _run_agent_streaming(
                 assessment_id,
+                3,
                 "code_generator",
                 run_code_generator,
                 question=question,
@@ -509,8 +568,9 @@ def api_assess_stream(body: AssessRequest, request: Request):
                     "id": assessment_id,
                 },
             )
-            critique = _run_agent(
+            critique = yield from _run_agent_streaming(
                 assessment_id,
+                4,
                 "critic",
                 run_critic,
                 question=question,

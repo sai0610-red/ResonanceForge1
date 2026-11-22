@@ -1,6 +1,6 @@
 """Architect agent — multi-agent system design."""
 
-from app.core.llm import get_llm, invoke_with_retry
+from app.core.llm import fallback_llm, get_llm, invoke_with_retry
 from app.models.schemas import ArchitectureResult, DiagnosisResult
 from app.services.context import format_intake_context
 
@@ -53,5 +53,6 @@ def run_architect(
         [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
-        ]
+        ],
+        fallback=fallback_llm(ArchitectureResult),
     )
