@@ -1,0 +1,72 @@
+{
+  "company_name": "Optex Systems Holdings",
+  "role_title": "Director of Quality & Operations (hypothetical)",
+  "industry": "Aerospace & Defense",
+  "company_size": "Small",
+  "primary_systems": "ERP with shop floor control module being rolled out (per FY2025 10-K; vendor not confirmed publicly); ISO 9001 quality management system with weekly material review board (per 10-K); nonconformance and inspection records (format assumed); first article inspection and test reports (per 10-K)",
+  "constraints": "Outside-in assumption set: ITAR-controlled technical data must stay in an approved, export-compliant environment (any model must run there; no public LLM endpoints); 90-day pilot at the Richardson site; no automatic disposition of nonconforming material; quality engineer signs off on every MRB recommendation",
+  "success_metric": "Assumed target: cut time to prepare the weekly material review board packet by half and reduce open nonconformance age by 25% within 90 days",
+  "question": "Optex Systems Holdings (NASDAQ: OPXS) is headquartered in Richardson, Texas. Per its FY2025 10-K it designs and makes optical sighting systems and assemblies for defense customers (periscopes for vehicles such as Abrams, Bradley and Stryker; rifle and surveillance sights; night vision optical assemblies), plus optical coatings at its Applied Optics Center in Dallas. FY2025 revenue was about $41.3M across two segments (Richardson $23.8M, Applied Optics Center $17.6M external). The Richardson site is about 49,100 sq ft with 87 FTEs on a single shift. Products are mostly build-to-print. Contracts often require first article acceptance and testing.\n\nWorkflow to assess (chosen by the author, not by Optex): nonconformance triage and material review board (MRB) preparation. The 10-K lists, among cost-control practices, an ISO 9001:2008 certificate with annual surveillance audits, weekly cycle counts, and a weekly material review board meeting on non-moving piece parts, and says the company is implementing the shop floor control module of its ERP. It also notes single-source suppliers for some contracts. An assumed pain point that follows: each week a quality engineer gathers open nonconformances, inspection results, supplier history and part status from several places to build the MRB packet.\n\nSystems: the ERP is referenced in the 10-K, but its vendor is not confirmed in public filings, so it is assumed. Nonconformance and inspection record formats are assumed.\n\nPilot idea: a narrow multi-agent assistant that pulls open nonconformances and related inspection notes, groups them by part, supplier and defect type, attaches relevant history, drafts a suggested disposition category with a short justification, and assembles the weekly MRB packet. A quality engineer approves every disposition. Nothing is scrapped, reworked or returned automatically.\n\nConstraints (assumed): technical data is ITAR-controlled, so any model and all data must stay in an approved environment; no public model endpoints. 90 days, Richardson site, small quality team. Success means faster MRB prep and lower nonconformance age. All checklist answers are outside-in assumptions.",
+  "checklist": [
+    {
+      "question_id": "access_data_quality",
+      "value": 3
+    },
+    {
+      "question_id": "access_unified_apis",
+      "value": 2
+    },
+    {
+      "question_id": "access_pii_governance",
+      "value": 3
+    },
+    {
+      "question_id": "access_latency_freshness",
+      "value": 3
+    },
+    {
+      "question_id": "access_integrations",
+      "value": 2
+    },
+    {
+      "question_id": "adapt_ai_strategy",
+      "value": 2
+    },
+    {
+      "question_id": "adapt_talent_partners",
+      "value": 2
+    },
+    {
+      "question_id": "adapt_change_management",
+      "value": 3
+    },
+    {
+      "question_id": "adapt_exec_sponsorship",
+      "value": 3
+    },
+    {
+      "question_id": "adapt_pilot_budget",
+      "value": 2
+    },
+    {
+      "question_id": "adopt_security_compliance",
+      "value": 4
+    },
+    {
+      "question_id": "adopt_observability",
+      "value": 2
+    },
+    {
+      "question_id": "adopt_human_in_loop",
+      "value": 3
+    },
+    {
+      "question_id": "adopt_eval_testing",
+      "value": 2
+    },
+    {
+      "question_id": "adopt_production_ownership",
+      "value": 3
+    }
+  ]
+}
