@@ -284,6 +284,9 @@
     lastCode = g.code || "";
     els.codeBlock.innerHTML = simpleHighlight(lastCode);
     renderScaffoldCheck(report.scaffold_check);
+    if (window.RFEvidence) {
+      window.RFEvidence.render(document.getElementById("evidenceCard"), report.evidence);
+    }
 
     fillList(els.strengthsList, c.strengths);
     fillList(els.weaknessesList, c.weaknesses);

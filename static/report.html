@@ -116,6 +116,15 @@
             </div>
           </div>
         </div>
+
+        <div class="card evidence-card hidden" id="evidenceCard">
+          <div class="card-head">
+            <h3>Evidence</h3>
+            <span class="badge badge-muted">Customer documents</span>
+          </div>
+          <p class="hint">Passages retrieved from the uploaded documents and shown to the agents. Citations like [D1:C2] in the text above point here; any the model invented were removed.</p>
+          <div class="evidence-body"></div>
+        </div>
       </section>
     </main>
 
@@ -123,6 +132,7 @@
       <span>Generated with ResonanceForge · Diagnose · Design · Generate · Critique · Share with your VP</span>
     </footer>
   </div>
+  <script src="/static/evidence.js"></script>
   <script src="/static/report.js"></script>
 </body>
 </html>

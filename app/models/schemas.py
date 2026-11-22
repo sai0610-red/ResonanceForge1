@@ -59,6 +59,9 @@ class AssessRequest(BaseModel):
     constraints: Optional[str] = None
     success_metric: Optional[str] = None
     checklist: Optional[List[ChecklistAnswer]] = None
+    # Optional: id returned by POST /api/documents. Grounds the Diagnostician
+    # (when it uses the LLM) and the Architect in the customer's own documents.
+    document_set_id: Optional[str] = None
 
 
 class PilotPackageInfo(BaseModel):
@@ -77,6 +80,31 @@ class ScaffoldCheck(BaseModel):
     has_compile: bool = False
 
 
+class EvidenceDocument(BaseModel):
+    label: str  # "D1"
+    filename: str
+
+
+class EvidencePassage(BaseModel):
+    """A chunk that was retrieved and shown to an agent for this assessment."""
+
+    ref: str  # "D1:C3"
+    document: str
+    chunk: int
+    score: float
+    text: str
+    used_by: List[str] = Field(default_factory=list)
+    cited: bool = False
+
+
+class Evidence(BaseModel):
+    document_set_id: str
+    documents: List[EvidenceDocument] = Field(default_factory=list)
+    passages: List[EvidencePassage] = Field(default_factory=list)
+    # Citation markers the model produced that did not match a retrieved chunk.
+    citations_dropped: int = 0
+
+
 class ResonanceReport(BaseModel):
     user_question: str
     diagnosis: DiagnosisResult
@@ -85,3 +113,4 @@ class ResonanceReport(BaseModel):
     critique: CritiqueResult
     pilot: Optional[PilotPackageInfo] = None
     scaffold_check: Optional[ScaffoldCheck] = None
+    evidence: Optional[Evidence] = None

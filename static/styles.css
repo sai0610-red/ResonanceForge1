@@ -592,3 +592,9 @@ li { margin: 6px 0; line-height: 1.45; }
 .badge.fail { background: rgba(248, 113, 113, 0.08); color: #e7a3a3; border-color: rgba(248, 113, 113, 0.28); }
 .scaffold-detail { margin: 8px 0 0; font-size: 0.82rem; }
 .pilot-msg { margin: 10px 0 0; font-size: 0.85rem; color: var(--danger); }
+
+/* Evidence (customer-document grounding) */
+.evidence-item { border-left: 3px solid #cbd5e1; padding: 6px 12px; margin: 10px 0; }
+.evidence-item.cited { border-left-color: #2563eb; }
+.evidence-head { font-size: 0.9rem; }
+.evidence-item blockquote { margin: 6px 0 0; color: #475569; font-size: 0.88rem; white-space: pre-wrap; }

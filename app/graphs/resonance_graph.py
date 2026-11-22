@@ -14,8 +14,10 @@ from app.models.schemas import (
     CodeGenerationResult,
     CritiqueResult,
     DiagnosisResult,
+    Evidence,
     ResonanceReport,
 )
+from app.rag import service as rag
 from app.services.context import gap_summary_from_diagnosis
 
 INTAKE_KEYS = (
@@ -49,17 +51,31 @@ class ResonanceState(TypedDict, total=False):
     architecture: Annotated[Optional[ArchitectureResult], _replace]
     generated_code: Annotated[Optional[CodeGenerationResult], _replace]
     critique: Annotated[Optional[CritiqueResult], _replace]
+    # Optional customer-document retrieval (None / inactive = no documents).
+    grounding: Annotated[Optional[Any], _replace]
+    evidence: Annotated[Optional[Evidence], _replace]
 
 
 def _intake_kwargs(state: ResonanceState) -> dict:
     return {k: state.get(k) for k in INTAKE_KEYS}
 
 
+def _grounding(state: ResonanceState) -> rag.Grounding:
+    return state.get("grounding") or rag.Grounding()
+
+
 def _diagnostician_node(state: ResonanceState) -> dict:
+    intake = _intake_kwargs(state)
+    passages = None
+    if rag.needs_llm_diagnosis(state.get("checklist")):
+        passages = rag.passages_block(
+            rag.retrieve_for_diagnosis(_grounding(state), state["question"], intake)
+        )
     result = run_diagnostician(
         question=state["question"],
         checklist=state.get("checklist"),
-        **_intake_kwargs(state),
+        passages=passages,
+        **intake,
     )
     return {"diagnosis": result}
 
@@ -67,13 +83,19 @@ def _diagnostician_node(state: ResonanceState) -> dict:
 def _architect_node(state: ResonanceState) -> dict:
     diagnosis = state["diagnosis"]
     gap_summary = gap_summary_from_diagnosis(diagnosis) if diagnosis else None
+    grounding = _grounding(state)
+    intake = _intake_kwargs(state)
     result = run_architect(
         question=state["question"],
         diagnosis=diagnosis,
         checklist_gap_summary=gap_summary,
-        **_intake_kwargs(state),
+        passages=rag.passages_block(
+            rag.retrieve_for_architect(grounding, state["question"], intake, diagnosis)
+        ),
+        **intake,
     )
-    return {"architecture": result}
+    diagnosis, result, evidence = rag.ground(grounding, diagnosis, result)
+    return {"diagnosis": diagnosis, "architecture": result, "evidence": evidence}
 
 
 def _code_generator_node(state: ResonanceState) -> dict:
@@ -152,8 +174,12 @@ def run_assessment(
     success_metric: str | None = None,
     checklist: List[Any] | Dict[str, int] | None = None,
     assessment_id: str | None = None,
+    grounding: Any = None,
 ) -> ResonanceReport:
-    """Run the full four-agent assessment and return a ResonanceReport."""
+    """Run the full four-agent assessment and return a ResonanceReport.
+
+    `grounding` is an optional `rag.Grounding` (customer documents).
+    """
     if not question or not question.strip():
         raise ValueError("question must be a non-empty string")
 
@@ -174,6 +200,8 @@ def run_assessment(
             "architecture": None,
             "generated_code": None,
             "critique": None,
+            "grounding": grounding,
+            "evidence": None,
         }
     )
 
@@ -183,6 +211,7 @@ def run_assessment(
         architecture=final["architecture"],
         generated_code=final["generated_code"],
         critique=final["critique"],
+        evidence=final.get("evidence"),
     )
 
 

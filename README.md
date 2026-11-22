@@ -11,6 +11,8 @@ A 30-second walkthrough belongs at [`docs/screenshots/demo.gif`](docs/screenshot
 
 You describe a situation and answer a fixed 15-question checklist across three **readiness dimensions**: ACCESS (data, APIs, integrations), ADAPT (strategy, sponsorship, budget), and ADOPT (security, observability, human review, evals, ownership). Four agents then run in order: Diagnostician, Architect, Code Generator, Critic.
 
+Optionally, upload the customer's own documents (SOPs, system notes; `.txt`, `.md`, `.pdf`). The Architect gets the most relevant passages, cites them as `[D1:C2]`, and the report adds an **Evidence** section. Citations that do not match a retrieved passage are removed. See [docs/rag.md](docs/rag.md).
+
 ## Quick start
 
 ```bash
@@ -45,6 +47,9 @@ flowchart LR
     Check -->|no| DiagLLM["Diagnostician LLM"]
     Rubric --> Arch["Architect"]
     DiagLLM --> Arch
+    Docs["Optional customer docs<br/>BM25 top-k passages"] -.-> DiagLLM
+    Docs -.-> Arch
+    Arch --> Cite["Citation validator<br/>drop unknown [D:C]"]
     Arch --> Code["Code Generator"]
     Code --> Compile["ast.parse + compile<br/>never exec"]
     Compile --> Critic["Critic"]
@@ -55,7 +60,7 @@ flowchart LR
 | Stage | What it does |
 |-------|----------------|
 | Diagnostician | Scores ACCESS / ADAPT / ADOPT (1–10), names gaps, overall Low / Medium / High. Skips the LLM when all 15 answers are present (`app/rubric/checklist.py`). |
-| Architect | Agent roles, a high-level flow, estimated complexity. |
+| Architect | Agent roles, a high-level flow, estimated complexity. With documents attached, grounded in retrieved passages and cited `[D1:C2]`. |
 | Code Generator | A LangGraph Python scaffold (`StateGraph`, `.compile()`). |
 | Critic | Risks, recommendations, a go / no-go verdict: Ready for pilot, Needs work, or Not ready. |
 
@@ -87,6 +92,12 @@ Copy `.env.example` to `.env`. Never commit `.env`.
 | `LLM_RATE_LIMIT_BUDGET_SECONDS` | `90` | Total wait across 429 retries per call; honors Groq's Retry-After / "try again in Xs" |
 | `LLM_FALLBACK_MODEL` | *(empty)* | Optional model tried once after rate-limit retries run out (e.g. `openai/gpt-oss-20b`) |
 | `CRITIC_MAX_CODE_CHARS` | `8000` | Generated code longer than this is trimmed (head + tail) before the critic reviews it |
+| `RAG_MAX_FILES` | `5` | Files per document upload |
+| `RAG_MAX_FILE_BYTES` | `2000000` | Max bytes per uploaded file (413 if over) |
+| `RAG_MAX_TOTAL_CHARS` | `300000` | Max extracted text per document set |
+| `RAG_CHUNK_CHARS` / `RAG_CHUNK_OVERLAP` | `800` / `120` | Chunk size and carry-over for long paragraphs |
+| `RAG_TOP_K` | `4` | Passages per agent prompt |
+| `UPLOAD_RATE_LIMIT_PER_HOUR` | `20` | Document uploads per client IP per hour |
 
 `GET /health` returns `{"status","env","db_ok","model"}` and an `X-Request-ID` header. No secrets. Logs are JSON lines (`request_id`, `assessment_id`, `agent`, `latency_ms`, `ok`). The demo token and API key are never logged.
 
@@ -101,11 +112,11 @@ This repo is deploy-ready; nothing is deployed automatically.
 
 ## Security model
 
-- **Demo token.** When `DEMO_TOKEN` is set, these require `X-Demo-Token` (constant-time compare, 401 on miss): `POST /assess`, `POST /api/assessments/stream`, `GET /api/assessments`, `GET /api/assessments/{id}`, `GET /api/assessments/{id}/pilot.zip`. Public: `GET /`, `/health`, `/r/{id}`, `GET /api/checklist`, `GET /api/reports/{id}`, `/static/*`.
+- **Demo token.** When `DEMO_TOKEN` is set, these require `X-Demo-Token` (constant-time compare, 401 on miss): `POST /assess`, `POST /api/assessments/stream`, `GET /api/assessments`, `GET /api/assessments/{id}`, `GET /api/assessments/{id}/pilot.zip`, `POST /api/documents`, `GET /api/documents/{id}`. Public: `GET /`, `/health`, `/r/{id}`, `GET /api/checklist`, `GET /api/reports/{id}`, `/static/*`.
 - **Rate limit.** Sliding window per client IP on the two assessment POST routes. Over the limit: **429** + `Retry-After`. `TRUSTED_PROXY` defaults to off so clients cannot spoof `X-Forwarded-For`.
-- **Input limits.** Empty or over-long `question` returns **422** before any LLM call.
+- **Input limits.** Empty or over-long `question` returns **422** before any LLM call. Document uploads are capped by count, bytes, and extracted characters (**413**), restricted to txt / md / pdf (**415**), and only extracted text is stored.
 - **Headers.** `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Content-Security-Policy`, plus HSTS in production. Optional CORS via `CORS_ORIGINS`.
-- **Share links.** `/r/{id}` is public if you have the UUID. Links do not expire and cannot be revoked. See Limitations.
+- **Share links.** `/r/{id}` is public if you have the UUID. Links do not expire and cannot be revoked. If documents were attached, the share page includes the Evidence passages, so do not attach anything you would not put in the report. See Limitations.
 - **Production startup.** Refuses to boot without `GROQ_API_KEY` and `DEMO_TOKEN`.
 
 ## Limitations
@@ -117,7 +128,8 @@ This repo is deploy-ready; nothing is deployed automatically.
 - **Share links are public** and have no expiry or revocation. IDs are random UUID4s.
 - **Demo token is a shared secret**, not per-user auth. No SSO, no multi-tenant isolation.
 - **Groq free tier is ~8,000 tokens/minute** for `openai/gpt-oss-120b`. One run makes up to three LLM calls in under a minute, so the Critic can hit the limit. The app waits for Groq's reset hint (the UI shows "Waiting on model rate limit") instead of failing, which can add up to a minute to a run. A paid Groq tier removes the wait.
-- No RAG grounding, no human-in-the-loop UI, no billing. Requires a valid Groq API key.
+- **Document grounding is lexical (BM25)**, not embeddings, and has no per-tenant isolation or OCR. See [docs/rag.md](docs/rag.md#not-done-yet).
+- No human-in-the-loop UI, no billing. Requires a valid Groq API key.
 
 ## Tests
 
@@ -131,6 +143,7 @@ make lint          # ruff check app tests
 - `tests/test_demo_gate.py` — 401 / public routes / 422 / 429 / production startup guard
 - `tests/test_hardening.py` — request IDs, security headers, trusted-proxy rate limit, LLM retry, stream gap summary, WAL
 - `tests/test_llm_rate_limit.py` — Groq 429 handling: retry-after hints, backoff budget, fallback model, SSE wait status, critic code trimming
+- `tests/test_rag.py` — chunking, txt/md/pdf extraction, BM25 ranking, citation validation (unknown and out-of-scope refs dropped), upload auth / size / type / rate limits, grounding on both the SSE and sync paths, no-docs behaviour unchanged
 
 The same lint + test commands are what CI should run on every push and pull request. No test makes a live Groq call.
 
@@ -149,6 +162,8 @@ The same lint + test commands are what CI should run on every push and pull requ
 | `GET` | `/api/assessments` | token | History list |
 | `GET` | `/api/assessments/{id}` | token | Full record |
 | `GET` | `/api/assessments/{id}/pilot.zip` | token | Runnable Docker pilot |
+| `POST` | `/api/documents` | token + upload limit | Multipart `files` (txt / md / pdf) → `document_set_id` |
+| `GET` | `/api/documents/{id}` | token | Labels, filenames, sizes, chunk counts |
 
 ## License
 

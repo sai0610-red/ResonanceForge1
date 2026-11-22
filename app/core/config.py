@@ -54,6 +54,15 @@ class Settings(BaseSettings):
     # The critic sees the generated code; cap it so one request fits a free-tier
     # tokens-per-minute budget.
     critic_max_code_chars: int = Field(default=8000, alias="CRITIC_MAX_CODE_CHARS")
+    # Optional customer-document grounding (POST /api/documents).
+    rag_max_files: int = Field(default=5, alias="RAG_MAX_FILES")
+    rag_max_file_bytes: int = Field(default=2_000_000, alias="RAG_MAX_FILE_BYTES")
+    rag_max_total_chars: int = Field(default=300_000, alias="RAG_MAX_TOTAL_CHARS")
+    rag_chunk_chars: int = Field(default=800, alias="RAG_CHUNK_CHARS")
+    rag_chunk_overlap: int = Field(default=120, alias="RAG_CHUNK_OVERLAP")
+    # Passages per agent prompt. 4 x ~800 chars is ~800 tokens on the free tier.
+    rag_top_k: int = Field(default=4, alias="RAG_TOP_K")
+    upload_rate_limit_per_hour: int = Field(default=20, alias="UPLOAD_RATE_LIMIT_PER_HOUR")
 
     @property
     def is_production(self) -> bool:

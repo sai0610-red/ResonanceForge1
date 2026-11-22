@@ -42,8 +42,13 @@ def run_diagnostician(
     constraints: str | None = None,
     success_metric: str | None = None,
     checklist: List[Any] | Dict[str, int] | None = None,
+    passages: str | None = None,
 ) -> DiagnosisResult:
-    """Diagnose multi-agent AI readiness; use rubric when checklist is complete."""
+    """Diagnose multi-agent AI readiness; use rubric when checklist is complete.
+
+    `passages` is an optional block of retrieved customer-document passages. It is
+    only used on the LLM path; the rubric path stays deterministic.
+    """
     if isinstance(checklist, dict):
         answers: Dict[str, int] = {str(k): int(v) for k, v in checklist.items()}
     else:
@@ -70,6 +75,8 @@ def run_diagnostician(
         "Estimate scores; prefix summary with 'Estimated without checklist: '; "
         "cite reasons as estimated without checklist."
     )
+    if passages:
+        user_prompt += "\n\n" + passages
 
     result = invoke_with_retry(llm,
         [

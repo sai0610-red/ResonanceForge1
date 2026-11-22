@@ -1,0 +1,18 @@
+Red River Components - maintenance systems notes (fictional, IT summary)
+
+CMMS (on-prem, vendor-hosted VM in plant 1 server room)
+- Read-only SQL view vw_open_workorders refreshed every 15 minutes. Columns: wo_number, asset_id, priority, status, created_at, sla_due_at, failure_text, assigned_tech.
+- Limited REST endpoint POST /api/wo/{id}/notes for adding notes. There is no endpoint to change priority or status; those changes are made in the CMMS client.
+- Service account for integrations exists but has no MFA; IT wants any new integration to use a separate account with read-only scope plus notes.
+
+ERP (inventory and purchasing module)
+- Parts on-hand and open purchase orders are exported to the CMMS as a nightly CSV batch at 01:00.
+- A read-only reporting database replica is available on request; IT approval takes about two weeks.
+
+MES downtime log
+- Event timestamps are accurate to the minute and keyed by machine id.
+- Not linked to work-order numbers. Machine id to CMMS asset_id mapping lives in a spreadsheet owned by reliability engineering, roughly 85% complete.
+
+Security and data handling
+- Plant data must stay in the company's approved cloud tenant or on-prem. No public endpoints without IT review.
+- Logs that contain work-order text are retained 90 days.

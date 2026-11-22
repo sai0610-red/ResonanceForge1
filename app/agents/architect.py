@@ -16,6 +16,8 @@ Rules:
 Favor pragmatic pilot-ready designs over enterprise mega-systems when readiness is Low or Medium.
 
 Map architecture to the checklist gaps and named primary systems when provided.
+When customer document passages are provided, ground integration and process
+choices in them and cite the passage label inline, e.g. [D1:C2].
 """
 
 
@@ -30,6 +32,7 @@ def run_architect(
     constraints: str | None = None,
     success_metric: str | None = None,
     checklist_gap_summary: str | None = None,
+    passages: str | None = None,
 ) -> ArchitectureResult:
     """Design a multi-agent architecture informed by the diagnosis."""
     llm = get_llm().with_structured_output(ArchitectureResult)
@@ -48,6 +51,8 @@ def run_architect(
     user_prompt = (
         f"{context}\n\nDiagnosis JSON:\n{diagnosis.model_dump_json(indent=2)}"
     )
+    if passages:
+        user_prompt += "\n\n" + passages
 
     return invoke_with_retry(llm,
         [

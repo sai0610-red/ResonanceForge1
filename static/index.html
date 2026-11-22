@@ -92,6 +92,12 @@
           </div>
 
 
+          <div class="field">
+            <label class="field-label" for="docFiles">Customer documents (optional)</label>
+            <input type="file" id="docFiles" multiple accept=".txt,.md,.markdown,.pdf,text/plain,text/markdown,application/pdf" />
+            <p class="hint">SOPs, system notes, policies. Up to 5 files (.txt, .md, .pdf, 2 MB each). Used to ground the architecture and cite passages. Leave empty to run without them.</p>
+          </div>
+
           <div class="checklist-section" id="checklistSection">
             <div class="checklist-head">
               <h3 class="checklist-title">Readiness checklist <span class="req">*</span></h3>
@@ -213,6 +219,15 @@
               </div>
             </div>
           </div>
+
+          <div class="card evidence-card hidden" id="evidenceCard">
+            <div class="card-head">
+              <h3>Evidence</h3>
+              <span class="badge badge-muted">Customer documents</span>
+            </div>
+            <p class="hint">Passages retrieved from the uploaded documents and shown to the agents. Citations like [D1:C2] in the text above point here; any the model invented were removed.</p>
+            <div class="evidence-body"></div>
+          </div>
         </section>
       </main>
 
@@ -221,6 +236,7 @@
       </footer>
     </div>
   </div>
+  <script src="/static/evidence.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>
