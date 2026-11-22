@@ -1,0 +1,25 @@
+{
+  "description": "Every answer 1/5: lowest possible scores, Low band.",
+  "intake": {
+    "question": "Edge case: a 200-person distributor wants an agent to triage inbound purchase-order emails into the ERP.",
+    "industry": "Distribution",
+    "company_size": "Mid-size"
+  },
+  "checklist": {
+    "all": 1
+  },
+  "stub": {
+    "critique": {
+      "final_verdict": "Not ready"
+    }
+  },
+  "expected": {
+    "scores": {
+      "access": 2,
+      "adapt": 2,
+      "adopt": 2
+    },
+    "overall_readiness": "Low",
+    "diagnosis_source": "rubric"
+  }
+}

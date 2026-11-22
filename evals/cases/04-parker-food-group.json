@@ -1,0 +1,13 @@
+{
+  "description": "Outside-in example: Parker Food Group (docs/examples/parker-food-group).",
+  "intake_file": "docs/examples/parker-food-group/intake.json",
+  "expected": {
+    "scores": {
+      "access": 5,
+      "adapt": 6,
+      "adopt": 5
+    },
+    "overall_readiness": "Medium",
+    "diagnosis_source": "rubric"
+  }
+}

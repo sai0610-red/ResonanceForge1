@@ -1,0 +1,24 @@
+{
+  "description": "Red River with the two fictional sample documents. The stubbed Architect cites real chunks plus one invented label that must be removed.",
+  "intake_file": "docs/red-river-intake.json",
+  "documents": [
+    "docs/sample-docs/red-river-wo-priority-sop.md",
+    "docs/sample-docs/red-river-systems-notes.txt"
+  ],
+  "stub": {
+    "architecture": {
+      "rationale": "Only planners may change priority [D1:C1]. Integrations use the read-only SQL view [D2:C1]. Invented reference [D9:C9]."
+    }
+  },
+  "expected": {
+    "scores": {
+      "access": 5,
+      "adapt": 6,
+      "adopt": 4
+    },
+    "overall_readiness": "Medium",
+    "diagnosis_source": "rubric",
+    "evidence": true,
+    "min_citations_dropped": 1
+  }
+}

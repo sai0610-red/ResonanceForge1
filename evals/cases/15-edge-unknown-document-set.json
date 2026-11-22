@@ -1,0 +1,15 @@
+{
+  "description": "An unknown document_set_id is rejected before any LLM call.",
+  "intake": {
+    "question": "Edge case: a 200-person distributor wants an agent to triage inbound purchase-order emails into the ERP.",
+    "industry": "Distribution",
+    "company_size": "Mid-size"
+  },
+  "checklist": {
+    "all": 3
+  },
+  "document_set_id": "does-not-exist",
+  "expected": {
+    "http_status": 422
+  }
+}

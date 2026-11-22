@@ -1,0 +1,40 @@
+{
+  "description": "Mean 4.67 (4/5/5): just over the 4.5 threshold.",
+  "intake": {
+    "question": "Edge case: a 200-person distributor wants an agent to triage inbound purchase-order emails into the ERP.",
+    "industry": "Distribution",
+    "company_size": "Mid-size"
+  },
+  "checklist": {
+    "access": [
+      2,
+      2,
+      2,
+      2,
+      2
+    ],
+    "adapt": [
+      3,
+      3,
+      2,
+      2,
+      2
+    ],
+    "adopt": [
+      3,
+      3,
+      2,
+      2,
+      2
+    ]
+  },
+  "expected": {
+    "scores": {
+      "access": 4,
+      "adapt": 5,
+      "adopt": 5
+    },
+    "overall_readiness": "Medium",
+    "diagnosis_source": "rubric"
+  }
+}

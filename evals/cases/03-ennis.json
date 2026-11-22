@@ -1,0 +1,13 @@
+{
+  "description": "Outside-in example: Ennis, Inc. (docs/examples/ennis). Public information and assumed answers.",
+  "intake_file": "docs/examples/ennis/intake.json",
+  "expected": {
+    "scores": {
+      "access": 5,
+      "adapt": 5,
+      "adopt": 5
+    },
+    "overall_readiness": "Medium",
+    "diagnosis_source": "rubric"
+  }
+}

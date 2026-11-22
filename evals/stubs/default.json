@@ -1,0 +1,40 @@
+{
+  "architecture": {
+    "recommended_agents": [
+      {"name": "ExceptionCollector", "responsibility": "Read open exceptions from the system of record."},
+      {"name": "Verifier", "responsibility": "Cross-check each exception against a second source and flag mismatches."},
+      {"name": "TriageComposer", "responsibility": "Rank exceptions and draft a list for human approval."}
+    ],
+    "high_level_flow": [
+      "START: scheduled trigger",
+      "ExceptionCollector reads open items",
+      "Verifier enriches and flags mismatches",
+      "TriageComposer drafts a ranked list",
+      "Human reviewer approves or rejects each item",
+      "END"
+    ],
+    "rationale": "Narrow, read-mostly pilot with a human approval step, sized for the diagnosed readiness.",
+    "estimated_complexity": "Medium"
+  },
+  "generated_code": {
+    "language": "python",
+    "framework": "langgraph",
+    "code": "from typing import List, TypedDict\n\nfrom langgraph.graph import END, START, StateGraph\n\n\nclass PilotState(TypedDict, total=False):\n    items: List[str]\n    ranked: List[str]\n\n\ndef collect(state: PilotState) -> PilotState:\n    return {\"items\": list(state.get(\"items\") or [])}\n\n\ndef verify(state: PilotState) -> PilotState:\n    return {\"items\": [i for i in state.get(\"items\", []) if i]}\n\n\ndef compose(state: PilotState) -> PilotState:\n    return {\"ranked\": sorted(state.get(\"items\", []))}\n\n\ngraph = StateGraph(PilotState)\ngraph.add_node(\"collect\", collect)\ngraph.add_node(\"verify\", verify)\ngraph.add_node(\"compose\", compose)\ngraph.add_edge(START, \"collect\")\ngraph.add_edge(\"collect\", \"verify\")\ngraph.add_edge(\"verify\", \"compose\")\ngraph.add_edge(\"compose\", END)\napp = graph.compile()\n",
+    "explanation": "Three-node linear scaffold matching the recommended agents."
+  },
+  "critique": {
+    "strengths": ["Narrow scope with a human approval step."],
+    "weaknesses": ["Integrations are batch-based."],
+    "risks": ["Stale source data leads to wrong rankings."],
+    "recommendations": ["Add a golden set of past exceptions before go-live."],
+    "final_verdict": "Needs work"
+  },
+  "diagnosis": {
+    "access": {"score": 4, "reason": "Estimated: batch integrations only."},
+    "adapt": {"score": 5, "reason": "Estimated: sponsor named, no budget."},
+    "adopt": {"score": 3, "reason": "Estimated: no eval or monitoring practice."},
+    "overall_readiness": "Low",
+    "top_gaps": ["No evaluation set", "Batch-only data access", "No production owner"],
+    "summary": "Readiness is low because data access is batch-only and nobody owns production."
+  }
+}

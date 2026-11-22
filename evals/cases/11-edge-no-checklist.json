@@ -1,0 +1,13 @@
+{
+  "description": "No checklist: the Diagnostician uses the LLM and must label the summary as estimated.",
+  "intake": {
+    "question": "Edge case: a 200-person distributor wants an agent to triage inbound purchase-order emails into the ERP.",
+    "industry": "Distribution",
+    "company_size": "Mid-size"
+  },
+  "checklist": null,
+  "expected": {
+    "overall_readiness": "Low",
+    "diagnosis_source": "llm"
+  }
+}
