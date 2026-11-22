@@ -1,6 +1,5 @@
 # ResonanceForge
 
-[![CI](https://github.com/sai0610-red/ResonanceForge1/actions/workflows/ci.yml/badge.svg)](https://github.com/sai0610-red/ResonanceForge1/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-navy.svg)](LICENSE)
 
 Assess whether a team is ready to put agents on **one** workflow, then produce a leadership 1-pager and a starter LangGraph scaffold.
@@ -123,7 +122,7 @@ make lint          # ruff check app tests
 - `tests/test_demo_gate.py` — 401 / public routes / 422 / 429 / production startup guard
 - `tests/test_hardening.py` — request IDs, security headers, trusted-proxy rate limit, LLM retry, stream gap summary, WAL
 
-CI runs the same lint + test commands on every push and pull request. No test makes a live Groq call.
+The same lint + test commands are what CI should run on every push and pull request. No test makes a live Groq call.
 
 ## API summary
 
