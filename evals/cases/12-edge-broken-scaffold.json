@@ -1,0 +1,26 @@
+{
+  "description": "Generated code mentions StateGraph but has a syntax error: the report must still complete and the compile badge must say FAIL.",
+  "intake": {
+    "question": "Edge case: a 200-person distributor wants an agent to triage inbound purchase-order emails into the ERP.",
+    "industry": "Distribution",
+    "company_size": "Mid-size"
+  },
+  "checklist": {
+    "all": 3
+  },
+  "stub": {
+    "generated_code": {
+      "code": "from langgraph.graph import StateGraph\n\ndef broken(:\n    pass\n\ng = StateGraph(dict)\napp = g.compile()\n"
+    }
+  },
+  "expected": {
+    "scores": {
+      "access": 6,
+      "adapt": 6,
+      "adopt": 6
+    },
+    "overall_readiness": "Medium",
+    "diagnosis_source": "rubric",
+    "scaffold_ok": false
+  }
+}

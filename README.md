@@ -31,7 +31,7 @@ curl -N -X POST http://127.0.0.1:8000/api/assessments/stream \
   --data @docs/red-river-intake.json
 ```
 
-Docker: `make docker` (mounts `./data:/app/data`). Tests: `make test`. Lint: `make lint`.
+Docker: `make docker` (mounts `./data:/app/data`). Tests: `make test`. Lint: `make lint`. Evals: `make eval`.
 
 ## Examples
 
@@ -131,21 +131,25 @@ This repo is deploy-ready; nothing is deployed automatically.
 - **Document grounding is lexical (BM25)**, not embeddings, and has no per-tenant isolation or OCR. See [docs/rag.md](docs/rag.md#not-done-yet).
 - No human-in-the-loop UI, no billing. Requires a valid Groq API key.
 
-## Tests
+## Tests and evals
 
 ```bash
 make test          # python -m pytest tests/ -q
-make lint          # ruff check app tests
+make lint          # ruff check app tests evals
+make eval          # golden cases, offline (stubbed LLM); make eval-live for real calls
 ```
+
+`make eval` runs 15 golden cases (Red River, the three DFW examples, and edge cases) through the real app and checks rubric scores, verdict mapping, the scaffold compile check, citation validity, report sections, and the pilot zip. CI runs it after the tests and posts the summary table to the job page. See [docs/evals.md](docs/evals.md), including what it does not measure.
 
 - `tests/test_checklist.py` — rubric scoring
 - `tests/test_scaffold_check.py` — compile-check (valid, syntax error, fences, empty; never executes)
 - `tests/test_demo_gate.py` — 401 / public routes / 422 / 429 / production startup guard
 - `tests/test_hardening.py` — request IDs, security headers, trusted-proxy rate limit, LLM retry, stream gap summary, WAL
 - `tests/test_llm_rate_limit.py` — Groq 429 handling: retry-after hints, backoff budget, fallback model, SSE wait status, critic code trimming
+- `tests/test_evals.py` — the eval harness passes offline and fails on a wrong golden score or a Low-readiness "Ready for pilot"
 - `tests/test_rag.py` — chunking, txt/md/pdf extraction, BM25 ranking, citation validation (unknown and out-of-scope refs dropped), upload auth / size / type / rate limits, grounding on both the SSE and sync paths, no-docs behaviour unchanged
 
-The same lint + test commands are what CI should run on every push and pull request. No test makes a live Groq call.
+CI runs lint, tests, and offline evals on every push and pull request. No test or offline eval makes a live Groq call.
 
 ## API summary
 

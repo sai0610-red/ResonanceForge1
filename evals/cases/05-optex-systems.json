@@ -1,0 +1,13 @@
+{
+  "description": "Outside-in example: Optex Systems Holdings (docs/examples/optex-systems).",
+  "intake_file": "docs/examples/optex-systems/intake.json",
+  "expected": {
+    "scores": {
+      "access": 5,
+      "adapt": 5,
+      "adopt": 6
+    },
+    "overall_readiness": "Medium",
+    "diagnosis_source": "rubric"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "description": "Mean 4.33 (4/4/5): just under the 4.5 Low/Medium threshold.",
+  "intake": {
+    "question": "Edge case: a 200-person distributor wants an agent to triage inbound purchase-order emails into the ERP.",
+    "industry": "Distribution",
+    "company_size": "Mid-size"
+  },
+  "checklist": {
+    "access": [
+      2,
+      2,
+      2,
+      2,
+      2
+    ],
+    "adapt": [
+      2,
+      2,
+      2,
+      2,
+      2
+    ],
+    "adopt": [
+      3,
+      3,
+      2,
+      2,
+      2
+    ]
+  },
+  "stub": {
+    "critique": {
+      "final_verdict": "Not ready"
+    }
+  },
+  "expected": {
+    "scores": {
+      "access": 4,
+      "adapt": 4,
+      "adopt": 5
+    },
+    "overall_readiness": "Low",
+    "diagnosis_source": "rubric"
+  }
+}

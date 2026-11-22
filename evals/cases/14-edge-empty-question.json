@@ -1,0 +1,12 @@
+{
+  "description": "Whitespace-only situation text is rejected before any LLM call.",
+  "intake": {
+    "question": "   "
+  },
+  "checklist": {
+    "all": 3
+  },
+  "expected": {
+    "http_status": 422
+  }
+}

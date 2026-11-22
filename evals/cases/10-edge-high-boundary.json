@@ -1,0 +1,40 @@
+{
+  "description": "Mean 7.67 (8/7/8): just over the 7.5 Medium/High threshold.",
+  "intake": {
+    "question": "Edge case: a 200-person distributor wants an agent to triage inbound purchase-order emails into the ERP.",
+    "industry": "Distribution",
+    "company_size": "Mid-size"
+  },
+  "checklist": {
+    "access": [
+      4,
+      4,
+      4,
+      4,
+      4
+    ],
+    "adapt": [
+      4,
+      4,
+      4,
+      3,
+      3
+    ],
+    "adopt": [
+      4,
+      4,
+      4,
+      4,
+      4
+    ]
+  },
+  "expected": {
+    "scores": {
+      "access": 8,
+      "adapt": 7,
+      "adopt": 8
+    },
+    "overall_readiness": "High",
+    "diagnosis_source": "rubric"
+  }
+}

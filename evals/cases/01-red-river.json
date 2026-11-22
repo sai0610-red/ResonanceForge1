@@ -1,0 +1,13 @@
+{
+  "description": "Fictional Red River Components demo case (docs/demo-case.md).",
+  "intake_file": "docs/red-river-intake.json",
+  "expected": {
+    "scores": {
+      "access": 5,
+      "adapt": 6,
+      "adopt": 4
+    },
+    "overall_readiness": "Medium",
+    "diagnosis_source": "rubric"
+  }
+}

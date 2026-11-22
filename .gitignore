@@ -20,3 +20,6 @@ data/pilots/*.zip
 data/pilots/
 *.zip
 .ruff_cache/
+
+# eval output (CI uploads it as an artifact)
+evals/results/
