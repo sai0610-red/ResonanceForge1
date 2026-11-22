@@ -1,0 +1,22 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "InvokeConfiguredBedrockModel",
+      "Effect": "Allow",
+      "Action": ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+      "Resource": "arn:aws:bedrock:${AWS_REGION}::foundation-model/openai.gpt-oss-120b-1:0"
+    },
+    {
+      "Sid": "MountDataVolume",
+      "Effect": "Allow",
+      "Action": ["elasticfilesystem:ClientMount", "elasticfilesystem:ClientWrite"],
+      "Resource": "arn:aws:elasticfilesystem:${AWS_REGION}:${AWS_ACCOUNT_ID}:file-system/${EFS_FILE_SYSTEM_ID}",
+      "Condition": {
+        "StringEquals": {
+          "elasticfilesystem:AccessPointArn": "arn:aws:elasticfilesystem:${AWS_REGION}:${AWS_ACCOUNT_ID}:access-point/${EFS_ACCESS_POINT_ID}"
+        }
+      }
+    }
+  ]
+}

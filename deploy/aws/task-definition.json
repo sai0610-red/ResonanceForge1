@@ -1,0 +1,72 @@
+{
+  "family": "resonanceforge",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "runtimePlatform": {"cpuArchitecture": "X86_64", "operatingSystemFamily": "LINUX"},
+  "executionRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/resonanceforge-execution",
+  "taskRoleArn": "arn:aws:iam::${AWS_ACCOUNT_ID}:role/resonanceforge-task",
+  "containerDefinitions": [
+    {
+      "name": "app",
+      "image": "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/resonanceforge:${IMAGE_TAG}",
+      "essential": true,
+      "portMappings": [{"containerPort": 8000, "protocol": "tcp"}],
+      "environment": [
+        {"name": "ENV", "value": "production"},
+        {"name": "LLM_PROVIDER", "value": "${LLM_PROVIDER}"},
+        {"name": "BEDROCK_MODEL_ID", "value": "openai.gpt-oss-120b-1:0"},
+        {"name": "AWS_REGION", "value": "${AWS_REGION}"},
+        {"name": "GROQ_MODEL", "value": "openai/gpt-oss-120b"},
+        {"name": "DATA_DIR", "value": "/app/data"},
+        {"name": "LOG_FORMAT", "value": "json"},
+        {"name": "LOG_LEVEL", "value": "INFO"},
+        {"name": "TRUSTED_PROXY", "value": "true"},
+        {"name": "TRUSTED_PROXY_HOP", "value": "last"},
+        {"name": "RATE_LIMIT_PER_HOUR", "value": "5"}
+      ],
+      "secrets": [
+        {
+          "name": "DEMO_TOKEN",
+          "valueFrom": "${DEMO_TOKEN_SECRET_ARN}"
+        },
+        {
+          "name": "GROQ_API_KEY",
+          "valueFrom": "${GROQ_SECRET_ARN}"
+        }
+      ],
+      "mountPoints": [{"sourceVolume": "data", "containerPath": "/app/data", "readOnly": false}],
+      "healthCheck": {
+        "command": [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status == 200 else 1)"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 20
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/resonanceforge",
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-stream-prefix": "app"
+        }
+      }
+    }
+  ],
+  "volumes": [
+    {
+      "name": "data",
+      "efsVolumeConfiguration": {
+        "fileSystemId": "${EFS_FILE_SYSTEM_ID}",
+        "transitEncryption": "ENABLED",
+        "authorizationConfig": {"accessPointId": "${EFS_ACCESS_POINT_ID}", "iam": "ENABLED"}
+      }
+    }
+  ]
+}

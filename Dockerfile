@@ -8,10 +8,17 @@ WORKDIR /build
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-COPY requirements.txt .
+# INSTALL_AWS=true adds langchain-aws + boto3 for LLM_PROVIDER=bedrock
+# (docker build --build-arg INSTALL_AWS=true .). Off by default to keep the image small.
+ARG INSTALL_AWS=false
+
+COPY requirements.txt requirements-aws.txt ./
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir --upgrade pip \
-    && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
+    && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt \
+    && if [ "$INSTALL_AWS" = "true" ]; then \
+         /opt/venv/bin/pip install --no-cache-dir -r requirements-aws.txt; \
+       fi
 
 FROM python:3.11-slim
 

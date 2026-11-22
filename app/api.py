@@ -57,10 +57,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     settings.validate_for_startup()
     db.ensure_db()
     logger.info(
-        "startup env=%s model=%s demo_token_required=%s rate_limit_per_hour=%d "
+        "startup env=%s provider=%s model=%s demo_token_required=%s rate_limit_per_hour=%d "
         "trusted_proxy=%s data_dir=%s",
         settings.env,
-        settings.groq_model,
+        settings.provider,
+        settings.active_model,
         bool(settings.demo_token),
         settings.rate_limit_per_hour,
         settings.trusted_proxy,
@@ -137,7 +138,9 @@ def require_demo_token(
 
 
 def _client_ip(request: Request) -> str:
-    return client_ip(request, trusted_proxy=get_settings().trusted_proxy)
+    settings = get_settings()
+    hop = "last" if (settings.trusted_proxy_hop or "").strip().lower() == "last" else "first"
+    return client_ip(request, trusted_proxy=settings.trusted_proxy, hop=hop)
 
 
 def _enforce_rate_limit(request: Request) -> None:
@@ -197,15 +200,11 @@ def _checklist_from_body(body: AssessRequest) -> list | None:
     return body.checklist
 
 
-def _ensure_groq_configured() -> None:
-    if not (get_settings().groq_api_key or "").strip():
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                "GROQ_API_KEY is missing. "
-                "Copy .env.example to .env and set GROQ_API_KEY."
-            ),
-        )
+def _ensure_llm_configured() -> None:
+    """500 before any work when the configured LLM provider cannot be called."""
+    problem = get_settings().llm_config_error()
+    if problem:
+        raise HTTPException(status_code=500, detail=problem)
 
 
 def _map_assessment_error(exc: Exception) -> HTTPException:
@@ -221,12 +220,21 @@ def _map_assessment_error(exc: Exception) -> HTTPException:
             "unauthorized",
             "invalid api",
             "groq",
+            "bedrock",
+            "accessdenied",
+            "credentials",
+            "security token",
         )
     ):
         # Never echo provider error text — it can include credentials.
+        hint = (
+            "Check the task role / AWS credentials and Bedrock model access"
+            if get_settings().provider == "bedrock"
+            else "Check GROQ_API_KEY"
+        )
         return HTTPException(
             status_code=502,
-            detail="LLM provider error. Check GROQ_API_KEY and try again.",
+            detail=f"LLM provider error. {hint} and try again.",
         )
     return HTTPException(
         status_code=502,
@@ -287,7 +295,8 @@ def health():
         "status": "ok",
         "env": settings.env,
         "db_ok": db.ping(),
-        "model": settings.groq_model,
+        "provider": settings.provider,
+        "model": settings.active_model,
     }
 
 
@@ -460,7 +469,7 @@ def _run_agent_streaming(
 def api_assess_stream(body: AssessRequest, request: Request):
     """Run assessment with SSE progress events; persist result + pilot zip."""
     question = _validated_question(body)
-    _ensure_groq_configured()
+    _ensure_llm_configured()
     _enforce_rate_limit(request)
     intake = _intake_from_body(body)
     checklist = _checklist_from_body(body)
@@ -663,7 +672,7 @@ def api_assess_stream(body: AssessRequest, request: Request):
 def assess(body: AssessRequest, request: Request):
     """Run the four-agent ResonanceForge assessment (sync; persists + pilot)."""
     question = _validated_question(body)
-    _ensure_groq_configured()
+    _ensure_llm_configured()
     _enforce_rate_limit(request)
     intake = _intake_from_body(body)
     checklist = _checklist_from_body(body)
