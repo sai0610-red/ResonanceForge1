@@ -1,0 +1,72 @@
+{
+  "company_name": "Ennis, Inc.",
+  "role_title": "Director of Operations Excellence (hypothetical)",
+  "industry": "Manufacturing",
+  "company_size": "Mid-size",
+  "primary_systems": "Order management / ERP (vendor not public; assumed); per-plant prepress and job-ticket tools (assumed, varies by acquired plant); distributor order portal and email intake (assumed); bulk-mail software at the Grand Prairie statement plant (Quadient named on CFC Print & Mail site)",
+  "constraints": "Outside-in assumption set: 90-day pilot limited to Texas plants; no automatic order release or plant reassignment without a customer-service rep approving; distributor and end-customer data stays in the approved environment; acquired plants keep their own systems during the pilot",
+  "success_metric": "Assumed target: cut manual touches per distributor order at the pilot plants by 30% and same-day routing errors (order sent to the wrong plant or missing specs) by half within 90 days",
+  "question": "Ennis, Inc. (NYSE: EBF) is headquartered in Midlothian, Texas. Per its FY2026 10-K it is primarily a trade printer selling business forms, pressure-seal forms, labels, tags, envelopes and presentation folders through independent distributors, with about $392M in FY2026 revenue, 1,835 employees and roughly 50 plants in 20 states. Texas plants listed in the 10-K include Ennis (three facilities), Arlington (statement printing and mailing), Grand Prairie (statement printing and mailing; CFC Print & Mail, acquired November 2025) and Wolfe City (business forms, flexographic printing).\n\nWorkflow to assess (chosen by the author, not by Ennis): distributor order intake and plant routing for the DFW-area plants. The 10-K describes a distributor channel of print distributors, commercial printers, fulfillment companies and software companies, a backlog of about $24.6M with a product mix shifting to shorter lead times, and a steady acquisition program. An assumed pain point that follows from that footprint: orders arrive by portal, email and PDF in many formats, and a customer-service team checks specs (stock, ink, numbering, quantities, ship-to) and routes each job to the right plant. Acquired plants often keep their own systems for a while.\n\nSystems: the ERP / order-management vendor is not public, so it is assumed. Prepress and job-ticket tools are assumed to differ by plant. The CFC Print & Mail site names Quadient bulk-mail software for the Grand Prairie statement work.\n\nPilot idea: a narrow multi-agent assistant that reads new distributor orders, extracts specs into a structured job ticket, flags missing or conflicting specs, suggests a plant based on product type and capacity notes, and drafts a clarification email to the distributor. A customer-service rep approves every routing and every outbound message. Nothing is released to production automatically.\n\nConstraints (assumed): 90 days, Texas plants only, small internal team, distributor data stays in the approved environment. Success means fewer manual touches and fewer misrouted or incomplete orders, not headcount reduction. All checklist answers are outside-in assumptions.",
+  "checklist": [
+    {
+      "question_id": "access_data_quality",
+      "value": 3
+    },
+    {
+      "question_id": "access_unified_apis",
+      "value": 2
+    },
+    {
+      "question_id": "access_pii_governance",
+      "value": 3
+    },
+    {
+      "question_id": "access_latency_freshness",
+      "value": 3
+    },
+    {
+      "question_id": "access_integrations",
+      "value": 2
+    },
+    {
+      "question_id": "adapt_ai_strategy",
+      "value": 2
+    },
+    {
+      "question_id": "adapt_talent_partners",
+      "value": 2
+    },
+    {
+      "question_id": "adapt_change_management",
+      "value": 3
+    },
+    {
+      "question_id": "adapt_exec_sponsorship",
+      "value": 3
+    },
+    {
+      "question_id": "adapt_pilot_budget",
+      "value": 3
+    },
+    {
+      "question_id": "adopt_security_compliance",
+      "value": 3
+    },
+    {
+      "question_id": "adopt_observability",
+      "value": 2
+    },
+    {
+      "question_id": "adopt_human_in_loop",
+      "value": 3
+    },
+    {
+      "question_id": "adopt_eval_testing",
+      "value": 2
+    },
+    {
+      "question_id": "adopt_production_ownership",
+      "value": 3
+    }
+  ]
+}

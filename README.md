@@ -31,6 +31,10 @@ curl -N -X POST http://127.0.0.1:8000/api/assessments/stream \
 
 Docker: `make docker` (mounts `./data:/app/data`). Tests: `make test`. Lint: `make lint`.
 
+## Examples
+
+The fictional [Red River Components](docs/demo-case.md) case is the primary demo. [`docs/examples/`](docs/examples/README.md) adds three outside-in runs on real Dallas–Fort Worth manufacturers (Ennis, Parker Food Group, Optex Systems). They are built only from public information, with assumed checklist answers, and are not affiliated with or reviewed by those companies.
+
 ## Architecture
 
 ```mermaid

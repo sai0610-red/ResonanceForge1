@@ -1,0 +1,72 @@
+{
+  "company_name": "Parker Food Group (Parker Products)",
+  "role_title": "Director of R&D Operations (hypothetical)",
+  "industry": "Food & Beverage",
+  "company_size": "Mid-size",
+  "primary_systems": "ERP with formulation / item master (vendor not public; assumed); CRM or shared tracker for customer sample requests (assumed); specification and allergen documents (assumed); production line quality and OEE data at Fort Worth (OEE and real-time QC feedback named in a 2018 company release)",
+  "constraints": "Outside-in assumption set: 90-day pilot at the Fort Worth R&D and manufacturing site; no automatic spec, formula or allergen decisions; customer formulas and specs are confidential and stay in the approved environment; food-safety and allergen statements always reviewed by a qualified person",
+  "success_metric": "Assumed target: cut time from customer sample request to a complete, reviewed project brief from days to under one business day, and reduce back-and-forth clarification rounds by 30% within 90 days",
+  "question": "Parker Food Group (PFG) is headquartered in Fort Worth, Texas. Its brands are Parker Products (since 1926) and Creative Food Ingredients. It develops and makes inclusions, toppings, baked pieces, pralines, coatings and bases for dairy, bakery, beverage, confectionery and snack customers. Public sources say: a 90,000+ sq ft Fort Worth manufacturing and R&D plant opened in 2018 with 12 segregated lines and an R&D pilot plant; other plants in Perry, NY and Mexico, MO; about 370 employees and double-digit growth when Investindustrial acquired it from The Riverside Company in August 2022. Revenue is not public. It is privately held.\n\nWorkflow to assess (chosen by the author, not by PFG): customer sample-request and new-product brief intake at the Fort Worth R&D group. The 2022 acquisition release says a typical project involves 150+ touch points between PFG and the customer from ideation to commercialization, and most projects end in a custom ingredient. An assumed pain point that follows: requests arrive by email, calls and sales notes with partial information (target application, process temperature, allergen limits, claims such as no sugar added, volumes, timing), and R&D and sales spend time chasing missing details before bench work starts.\n\nSystems: the ERP and formulation tools are not named publicly, so they are assumed. A 2018 company release says real-time quality checks and OEE feedback are available digitally from the Fort Worth lines. A CRM or shared tracker for sample requests is assumed.\n\nPilot idea: a narrow multi-agent assistant that reads an incoming request, fills a structured project brief, checks it against a required-fields list and the plant's line capabilities, flags allergen or claim questions for a qualified reviewer, finds similar past briefs, and drafts clarification questions for the salesperson. A food scientist approves every brief. No formula, spec or allergen statement is generated or changed automatically.\n\nConstraints (assumed): 90 days, Fort Worth only, small cross-functional team, customer formulas confidential. Success means faster, cleaner briefs and fewer clarification rounds. All checklist answers are outside-in assumptions.",
+  "checklist": [
+    {
+      "question_id": "access_data_quality",
+      "value": 3
+    },
+    {
+      "question_id": "access_unified_apis",
+      "value": 2
+    },
+    {
+      "question_id": "access_pii_governance",
+      "value": 3
+    },
+    {
+      "question_id": "access_latency_freshness",
+      "value": 3
+    },
+    {
+      "question_id": "access_integrations",
+      "value": 2
+    },
+    {
+      "question_id": "adapt_ai_strategy",
+      "value": 2
+    },
+    {
+      "question_id": "adapt_talent_partners",
+      "value": 3
+    },
+    {
+      "question_id": "adapt_change_management",
+      "value": 3
+    },
+    {
+      "question_id": "adapt_exec_sponsorship",
+      "value": 3
+    },
+    {
+      "question_id": "adapt_pilot_budget",
+      "value": 3
+    },
+    {
+      "question_id": "adopt_security_compliance",
+      "value": 3
+    },
+    {
+      "question_id": "adopt_observability",
+      "value": 2
+    },
+    {
+      "question_id": "adopt_human_in_loop",
+      "value": 3
+    },
+    {
+      "question_id": "adopt_eval_testing",
+      "value": 2
+    },
+    {
+      "question_id": "adopt_production_ownership",
+      "value": 3
+    }
+  ]
+}
